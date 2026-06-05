@@ -1,0 +1,150 @@
+﻿CULTIVO ;LABOR;UNIDAD;RENDIMIENTO;KEY
+GYPSOPHILA;Armado de camas;camas/hora;0.6;GYPSOPHILAArmado de camas
+GYPSOPHILA;Alzado de hombros con compost;camas/hora;4;GYPSOPHILAAlzado de hombros con compost
+GYPSOPHILA;Alzado de hombros sin compost;camas/hora;6;GYPSOPHILAAlzado de hombros sin compost
+GYPSOPHILA;Cambio de escalerillas poda;camas/hora;8;GYPSOPHILACambio de escalerillas poda
+GYPSOPHILA;Cambio de pingos poda;camas/hora;12;GYPSOPHILACambio de pingos poda
+GYPSOPHILA;Colocación de mallas;mallas/hora;3;GYPSOPHILAColocación de mallas
+GYPSOPHILA;Colocación de escalerillas;camas/hora;5;GYPSOPHILAColocación de escalerillas
+GYPSOPHILA;Colocación de pingos;pingos/hora;15;GYPSOPHILAColocación de pingos
+GYPSOPHILA;Cosecha;mallas/hora;12.8;GYPSOPHILACosecha
+GYPSOPHILA;Cosecha dumps;mallas/hora;20;GYPSOPHILACosecha dumps
+GYPSOPHILA;Desbrote 1;plantas/hora;345;GYPSOPHILADesbrote 1
+GYPSOPHILA;Desbrote 2;plantas/hora;500;GYPSOPHILADesbrote 2
+GYPSOPHILA;Desmalezado;camas/hora;3;GYPSOPHILADesmalezado
+GYPSOPHILA;Erradicación de planta;plantas/hora;160;GYPSOPHILAErradicación de planta
+GYPSOPHILA;Escarificado;camas/hora;4;GYPSOPHILAEscarificado
+GYPSOPHILA;Incorporación de compost;camas/hora;4;GYPSOPHILAIncorporación de compost
+GYPSOPHILA;Marcado y humedad;camas/hora;4;GYPSOPHILAMarcado y humedad
+GYPSOPHILA;Trinchado;camas/hora;5;GYPSOPHILATrinchado
+GYPSOPHILA;Pinch;camas/hora;2;GYPSOPHILAPinch
+GYPSOPHILA;Poda;plantas/hora;500;GYPSOPHILAPoda
+GYPSOPHILA;Raleo;plantas/hora;700;GYPSOPHILARaleo
+GYPSOPHILA;Retejido bloques poda;camas/hora;5;GYPSOPHILARetejido bloques poda
+GYPSOPHILA;Siembra;plantas/hora;700;GYPSOPHILASiembra
+GYPSOPHILA;Soft Pinch / Vegetativo;camas/hora;8;GYPSOPHILASoft Pinch / Vegetativo
+GYPSOPHILA;Tejido nuevo;camas/hora;0.9;GYPSOPHILATejido nuevo
+GYPSOPHILA;Tejido viejo;camas/hora;5;GYPSOPHILATejido viejo
+GYPSOPHILA;Retiro de tirasavia;camas/hora;6;GYPSOPHILARetiro de tirasavia
+GYPSOPHILA;Tumba;camas/hora;1;GYPSOPHILATumba
+GYPSOPHILA;Tutoreo;camas/hora;6;GYPSOPHILATutoreo
+HYPERICUM;Armado de camas;camas/hora;0.6;HYPERICUMArmado de camas
+HYPERICUM;Alzado de hombros;camas/hora;4;HYPERICUMAlzado de hombros
+HYPERICUM;Basaleo;camas/hora;1.5;HYPERICUMBasaleo
+HYPERICUM;Colocación de mallas;camas/hora;3;HYPERICUMColocación de mallas
+HYPERICUM;Colocación de alambre;camas/hora;6;HYPERICUMColocación de alambre
+HYPERICUM;Colocación de escalerillas;camas/hora;5;HYPERICUMColocación de escalerillas
+HYPERICUM;Colocación de pingos;pingos/hora;15;HYPERICUMColocación de pingos
+HYPERICUM;Cosecha;mallas/hora;21;HYPERICUMCosecha
+HYPERICUM;Malleros;mallas/hora;315;HYPERICUMMalleros
+HYPERICUM;Encalado;camas/hora;3.5;HYPERICUMEncalado
+HYPERICUM;Desbrote 1;plantas/hora;550;HYPERICUMDesbrote 1
+HYPERICUM;Desbrote 3;plantas/hora;1000;HYPERICUMDesbrote 3
+HYPERICUM;Desbrote 4;plantas/hora;1500;HYPERICUMDesbrote 4
+HYPERICUM;Desbrote 2;plantas/hora;650;HYPERICUMDesbrote 2
+HYPERICUM;Desmalezado;camas/hora;3;HYPERICUMDesmalezado
+HYPERICUM;Trinchado;plantas/hora;5;HYPERICUMTrinchado
+HYPERICUM;Escarificado;camas/hora;4;HYPERICUMEscarificado
+HYPERICUM;Guiado / Peinado;camas/hora;8;HYPERICUMGuiado / Peinado
+HYPERICUM;Pinch;plantas/hora;2500;HYPERICUMPinch
+HYPERICUM;Poda con Tijera;plantas/hora;500;HYPERICUMPoda con Tijera
+HYPERICUM;Sacudido;camas/hora;10;HYPERICUMSacudido
+HYPERICUM;Preparado de cama;plantas/hora;1000;HYPERICUMPreparado de cama
+HYPERICUM;Raleo poda / Selección;plantas/hora;525;HYPERICUMRaleo poda / Selección
+HYPERICUM;Raleo siembra / Selección;plantas/hora;900;HYPERICUMRaleo siembra / Selección
+HYPERICUM;Sacado de hoja;camas/hora;1;HYPERICUMSacado de hoja
+HYPERICUM;Siembra;plantas/hora;1000;HYPERICUMSiembra
+HYPERICUM;Sopladora;camas/hora;25;HYPERICUMSopladora
+HYPERICUM;Tejido viejo;camas/hora;4;HYPERICUMTejido viejo
+HYPERICUM;Tumba;camas/hora;3;HYPERICUMTumba
+HYPERICUM;Tutoreo;camas/hora;6;HYPERICUMTutoreo
+VERONICA;Alzado de hombros;camas/hora;4;VERONICAAlzado de hombros
+VERONICA;Bajado de mallas;camas/hora;3;VERONICABajado de mallas
+VERONICA;Basaleo;camas/hora;2;VERONICABasaleo
+VERONICA;Basaleo y bajado de hoja;camas/hora;0.5;VERONICABasaleo y bajado de hoja
+VERONICA;Alzado de camas;camas/hora;0.6;VERONICAAlzado de camas
+VERONICA;Armado de camas;camas/hora;1;VERONICAArmado de camas
+VERONICA;Cambio de escalerillas poda;camas/hora;8;VERONICACambio de escalerillas poda
+VERONICA;Cambio de pingos poda;pingos/hora;12;VERONICACambio de pingos poda
+VERONICA;Colocación de escalerillas;camas/hora;5;VERONICAColocación de escalerillas
+VERONICA;Colocación de mallas;mallas/hora;3;VERONICAColocación de mallas
+VERONICA;Colocación de pingos;pingos/hora;15;VERONICAColocación de pingos
+VERONICA;Cosecha;mallas/hora;20;VERONICACosecha
+VERONICA;Malleros;mallas/hora;126;VERONICAMalleros
+VERONICA;Desmalezado;camas/hora;2;VERONICADesmalezado
+VERONICA;Erradicación de planta;plantas/hora;200;VERONICAErradicación de planta
+VERONICA;Escarif. Siem;camas/hora;4;VERONICAEscarif. Siem
+VERONICA;Escarif. Poda;camas/hora;3;VERONICAEscarif. Poda
+VERONICA;Guiado / Peinado;camas/hora;6;VERONICAGuiado / Peinado
+VERONICA;Pinch;plantas/hora;2500;VERONICAPinch
+VERONICA;Pinch Flor;camas/hora;2;VERONICAPinch Flor
+VERONICA;Poda tijera;plantas/hora;500;VERONICAPoda tijera
+VERONICA;Poda guadañado ;camas/hora;2;VERONICAPoda guadañado 
+VERONICA;Raleo poda / Selección;plantas/hora;350;VERONICARaleo poda / Selección
+VERONICA;Raleo siembra / Selección;plantas/hora;500;VERONICARaleo siembra / Selección
+VERONICA;Sacado de hoja ;camas/hora;0.6;VERONICASacado de hoja 
+VERONICA;Trinchado;camas/hora;4;VERONICATrinchado
+VERONICA;Siembra;plantas/hora;1000;VERONICASiembra
+VERONICA;Tejido viejo;camas/hora;6;VERONICATejido viejo
+VERONICA;Tumba;camas/hora;3;VERONICATumba
+VERONICA;Tutoreo;camas/hora;6;VERONICATutoreo
+SOLIDAGO;Armado de camas;camas/hora;0.6;SOLIDAGOArmado de camas
+SOLIDAGO;Alzado de hombros con compost;camas/hora;4;SOLIDAGOAlzado de hombros con compost
+SOLIDAGO;Alzado de hombros sin compost;camas/hora;6;SOLIDAGOAlzado de hombros sin compost
+SOLIDAGO;Cambio de escalerillas poda;camas/hora;5;SOLIDAGOCambio de escalerillas poda
+SOLIDAGO;Cambio de pingos poda;camas/hora;15;SOLIDAGOCambio de pingos poda
+SOLIDAGO;Colocación de alambre;camas/hora;6;SOLIDAGOColocación de alambre
+SOLIDAGO;Colocación de mallas;mallas/hora;3;SOLIDAGOColocación de mallas
+SOLIDAGO;Colocación de pingos;pingos/hora;15;SOLIDAGOColocación de pingos
+SOLIDAGO;Cosecha;mallas/hora;20;SOLIDAGOCosecha
+SOLIDAGO;Malleros;mallas/hora;300;SOLIDAGOMalleros
+SOLIDAGO;Desmalezado;camas/hora;3;SOLIDAGODesmalezado
+SOLIDAGO;Escarif. Siem;camas/hora;4;SOLIDAGOEscarif. Siem
+SOLIDAGO;Escarif. Poda;camas/hora;3;SOLIDAGOEscarif. Poda
+SOLIDAGO;Guiado / Peinado;camas/hora;6;SOLIDAGOGuiado / Peinado
+SOLIDAGO;Pinch;camas/hora;2;SOLIDAGOPinch
+SOLIDAGO;Poda guadañado ;camas/hora;2;SOLIDAGOPoda guadañado 
+SOLIDAGO;Raleo poda / Selección;plantas/hora;300;SOLIDAGORaleo poda / Selección
+SOLIDAGO;Raleo siembra / Selección;plantas/hora;500;SOLIDAGORaleo siembra / Selección
+SOLIDAGO;Sacado de hoja;camas/hora;0.7;SOLIDAGOSacado de hoja
+SOLIDAGO;Siembra;plantas/hora;1000;SOLIDAGOSiembra
+SOLIDAGO;Trinchado;camas/hora;4;SOLIDAGOTrinchado
+SOLIDAGO;Tejido viejo;camas/hora;4;SOLIDAGOTejido viejo
+SOLIDAGO;Tumba;camas/hora;3;SOLIDAGOTumba
+SOLIDAGO;Tutoreo;camas/hora;6;SOLIDAGOTutoreo
+SOLIDAGO;Vegetativo;camas/hora;6;SOLIDAGOVegetativo
+SUNFLOWER;Cosecha;mallas/hora;8.333333333;SUNFLOWERCosecha
+SUNFLOWER;Alzado de hombros con compost;camas/hora;4;SUNFLOWERAlzado de hombros con compost
+SUNFLOWER;Alzado de hombros sin compost;camas/hora;6;SUNFLOWERAlzado de hombros sin compost
+SUNFLOWER;Colocación de alambre;camas/hora;6;SUNFLOWERColocación de alambre
+SUNFLOWER;Malleros;mallas/hora;300;SUNFLOWERMalleros
+SUNFLOWER;Colocación de escalerillas;camas/hora;5;SUNFLOWERColocación de escalerillas
+SUNFLOWER;Colocación de mallas;camas/hora;2;SUNFLOWERColocación de mallas
+SUNFLOWER;Colocación de pingos ;camas/hora;12;SUNFLOWERColocación de pingos 
+SUNFLOWER;Desmalezado;camas/hora;1.5;SUNFLOWERDesmalezado
+SUNFLOWER;Destapado de saran;camas/hora;4;SUNFLOWERDestapado de saran
+SUNFLOWER;Escarificado;camas/hora;4;SUNFLOWEREscarificado
+SUNFLOWER;Alzado de camas;camas/hora;0.6;SUNFLOWERAlzado de camas
+SUNFLOWER;Siem.Semilla;semillas/hora;1200;SUNFLOWERSiem.Semilla
+SUNFLOWER;Siem.Plantula;plantas/hora;650;SUNFLOWERSiem.Plantula
+SUNFLOWER;Tumba;camas/hora;3;SUNFLOWERTumba
+SUNFLOWER;Trinchado;camas/hora;4;SUNFLOWERTrinchado
+SUNFLOWER;Tapado con saran;camas/hora;3;SUNFLOWERTapado con saran
+SUNFLOWER;Tutoreo;camas/hora;7;SUNFLOWERTutoreo
+FERTILIZACION;Picar Caminos;camas/hora;6;FERTILIZACIONPicar Caminos
+FERTILIZACION;Desarmada;camas/hora;3;FERTILIZACIONDesarmada
+FERTILIZACION;Trinchar;camas/hora;5;FERTILIZACIONTrinchar
+FERTILIZACION;Surco Siembra;camas/hora;10;FERTILIZACIONSurco Siembra
+FERTILIZACION;Col. Mang. Simb;camas/hora;7;FERTILIZACIONCol. Mang. Simb
+FERTILIZACION;Col.Mang. Poda;camas/hora;10;FERTILIZACIONCol.Mang. Poda
+FERTILIZACION;Sacar Mangueras;camas/hora;10;FERTILIZACIONSacar Mangueras
+FERTILIZACION;Col. Blaukorn Gyp;camas/hora;12;FERTILIZACIONCol. Blaukorn Gyp
+FERTILIZACION;Varios;camas/hora;1;FERTILIZACIONVarios
+FERTILIZACION;Col. Calcimed;camas/hora;2;FERTILIZACIONCol. Calcimed
+FUMIGACION;Fumigación;camas/hora;32;FUMIGACIONFumigación
+FUMIGACION;Enraizantes;camas/hora;46;FUMIGACIONEnraizantes
+FUMIGACION;Giberélico;camas/hora;28;FUMIGACIONGiberélico
+FUMIGACION;Drench;camas/hora;23;FUMIGACIONDrench
+FUMIGACION;Desinfección;camas/hora;23;FUMIGACIONDesinfección
+FUMIGACION;Operadores;camas/hora;1;FUMIGACIONOperadores
+FUMIGACION;Varios;camas/hora;1;FUMIGACIONVarios
