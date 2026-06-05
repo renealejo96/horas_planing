@@ -143,7 +143,8 @@ App.registerView('ejecucion', async () => {
         let esSimulado = false;
 
         try {
-            const response = await fetch('https://cosecha-app.onrender.com/api/semanas');
+            const url = `https://cosecha-app.onrender.com/api/semanas/tallos-producto-maestro?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`Status: ${response.status}`);
             }
@@ -152,64 +153,97 @@ App.registerView('ejecucion', async () => {
             console.warn('Error fetching harvest API, falling back to mock data:', e);
             esSimulado = true;
             
-            // Simular datos de la API tomando en cuenta la semana y el día seleccionados
-            data = [
-                {
-                    semana: semanaActual.codigoAass,
-                    anio: semanaActual.anio,
-                    semana_numero: semanaActual.semana,
-                    cosechas: [
-                        { dia: nombreDia, fecha: fechaSeleccionada, cultivo: "GYPSOPHILA", total: 12500 },
-                        { dia: nombreDia, fecha: fechaSeleccionada, cultivo: "HYPERICUM", total: 8000 },
-                        { dia: nombreDia, fecha: fechaSeleccionada, cultivo: "VERONICA", total: 4500 },
-                        { dia: nombreDia, fecha: fechaSeleccionada, cultivo: "SOLIDAGO", total: 6200 },
-                        { dia: nombreDia, fecha: fechaSeleccionada, cultivo: "SUNFLOWER", total: 3500 }
-                    ]
-                }
-            ];
+            // Simular datos de la API en el formato de /api/semanas/tallos-producto-maestro
+            data = {
+                filtro_semana: semanaActual.codigoAass,
+                total_semanas: 1,
+                semanas: [
+                    {
+                        semana: semanaActual.codigoAass,
+                        productos: [
+                            {
+                                producto_maestro: "GYPSOPHILA",
+                                total_tallos: 15000,
+                                total_mallas: 600,
+                                total_registros: 10,
+                                dias: [
+                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 2500, total_mallas: 100, total_registros: 2 }
+                                ]
+                            },
+                            {
+                                producto_maestro: "HYPERICUM",
+                                total_tallos: 12000,
+                                total_mallas: 480,
+                                total_registros: 8,
+                                dias: [
+                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 2000, total_mallas: 80, total_registros: 2 }
+                                ]
+                            },
+                            {
+                                producto_maestro: "VERONICA",
+                                total_tallos: 6000,
+                                total_mallas: 240,
+                                total_registros: 6,
+                                dias: [
+                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 1000, total_mallas: 40, total_registros: 1 }
+                                ]
+                            },
+                            {
+                                producto_maestro: "SOLIDAGO",
+                                total_tallos: 9000,
+                                total_mallas: 360,
+                                total_registros: 5,
+                                dias: [
+                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 1500, total_mallas: 60, total_registros: 1 }
+                                ]
+                            },
+                            {
+                                producto_maestro: "SUNFLOWER",
+                                total_tallos: 4500,
+                                total_mallas: 150,
+                                total_registros: 4,
+                                dias: [
+                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 750, total_mallas: 25, total_registros: 1 }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            };
             
             showNotification('API externa no disponible (503). Usando datos simulados locales.', 'warning');
         }
 
-        // Buscar la semana activa
-        let semanaApi = data.find(item => 
-            String(item.semana) === String(semanaActual.codigoAass) ||
-            (item.anio === semanaActual.anio && item.semana_numero === semanaActual.semana) ||
-            (item.anio === semanaActual.anio && item.semana === semanaActual.semana)
-        );
+        // Buscar la semana activa en la respuesta de la API (generalmente es la primera porque filtramos en la query)
+        const semanaApi = data.semanas && data.semanas.length > 0 ? data.semanas[0] : null;
 
         if (!semanaApi) {
-            if (!esSimulado) {
-                showNotification(`No se encontraron registros de cosecha en la API para la semana ${semanaActual.codigoAass}`, 'warning');
-                return;
-            }
-            semanaApi = data[0];
-        }
-
-        const cosechas = semanaApi.cosechas || semanaApi.datos || [];
-        if (!cosechas.length) {
-            showNotification('No hay datos de cosecha disponibles para esta semana en la API', 'warning');
+            showNotification(`No se encontraron registros de cosecha en la respuesta para la semana ${semanaActual.codigoAass}`, 'warning');
             return;
         }
 
-        // Filtrar por el día seleccionado
-        const cosechasDia = cosechas.filter(c => 
-            String(c.dia).toLowerCase() === nombreDia.toLowerCase() ||
-            (c.fecha && c.fecha.split('T')[0] === fechaSeleccionada)
-        );
-
-        if (!cosechasDia.length) {
-            showNotification(`No se encontraron cosechas para el día ${nombreDia} en la API`, 'warning');
+        const productosApi = semanaApi.productos || [];
+        if (!productosApi.length) {
+            showNotification('No hay productos de cosecha disponibles para esta semana en la API', 'warning');
             return;
         }
 
         let matchCount = 0;
         const rows = document.querySelectorAll('#grid-container-ejecucion tr[data-producto-codigo]');
         
-        cosechasDia.forEach(c => {
-            const apiCultivo = String(c.cultivo || c.producto || '').toUpperCase().trim();
-            const totalCosechado = parseFloat(c.total || c.cantidad || c.unidades || 0);
+        productosApi.forEach(pApi => {
+            const apiCultivo = String(pApi.producto_maestro || '').toUpperCase().trim();
+            const diasCosecha = pApi.dias || [];
 
+            // Buscar el día seleccionado en los registros diarios del producto
+            const registroDia = diasCosecha.find(d => 
+                d.fecha === fechaSeleccionada || 
+                String(d.dia_semana).toLowerCase() === nombreDia.toLowerCase()
+            );
+
+            if (!registroDia) return;
+
+            const totalCosechado = parseFloat(registroDia.total_tallos || 0);
             if (totalCosechado <= 0) return;
 
             rows.forEach(row => {

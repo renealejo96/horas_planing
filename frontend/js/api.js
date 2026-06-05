@@ -1,8 +1,4 @@
-const API_BASE = window.location.protocol === 'file:' 
-    ? 'http://localhost:8080/api' 
-    : (window.location.port === '3000' || window.location.port === '5173' || window.location.port === '5500' || window.location.port === '5501') 
-        ? 'http://localhost:8080/api' 
-        : '/api';
+const API_BASE = '/api';
 
 const api = {
     async request(endpoint, method = 'GET', body = null) {
