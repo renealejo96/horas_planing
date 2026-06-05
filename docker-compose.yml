@@ -16,7 +16,7 @@ services:
       dockerfile: Dockerfile
     container_name: horas-frontend
     ports:
-      - "8081:80"
+      - "8085:80"
     depends_on:
       - backend
     restart: always

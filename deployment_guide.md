@@ -84,7 +84,7 @@ docker-compose up -d --build
 ```
 
 ### Paso C: Verificar que esté en Funcionamiento
-* El **Frontend** (Nginx) responderá en el puerto **8081** (puedes acceder ingresando la IP de tu VPS en el navegador, ej: `http://IP_DE_TU_VPS:8081`).
+* El **Frontend** (Nginx) responderá en el puerto **8085** (puedes acceder ingresando la IP de tu VPS en el navegador, ej: `http://IP_DE_TU_VPS:8085`).
 * El **Backend** (Spring Boot) correrá internamente y Nginx le redirigirá las llamadas de `/api/*`.
 
 ---
