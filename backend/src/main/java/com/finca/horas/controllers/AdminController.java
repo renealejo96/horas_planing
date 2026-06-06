@@ -3,8 +3,10 @@ package com.finca.horas.controllers;
 import com.finca.horas.entities.*;
 import com.finca.horas.repositories.*;
 import com.finca.horas.services.ImportacionRendimientoService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -129,15 +131,45 @@ public class AdminController {
     // ==================== ACTIVIDADES ====================
     
     @GetMapping("/actividades")
-    public List<Actividad> getActividades() {
-        return actividadRepository.findByActivoTrue();
+    public List<Actividad> getActividades(HttpServletRequest request) {
+        List<Actividad> todas = actividadRepository.findByActivoTrue();
+        return filtrarActividades(todas, request);
     }
     
     @GetMapping("/actividades/area/{areaId}")
-    public List<Actividad> getActividadesByArea(@PathVariable Long areaId) {
-        return areaRepository.findById(areaId)
+    public List<Actividad> getActividadesByArea(@PathVariable Long areaId, HttpServletRequest request) {
+        List<Actividad> todas = areaRepository.findById(areaId)
             .map(area -> actividadRepository.findByAreaAndActivoTrue(area))
             .orElse(List.of());
+        return filtrarActividades(todas, request);
+    }
+
+    private List<Actividad> filtrarActividades(List<Actividad> actividades, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return actividades;
+        }
+        String permitidasStr = (String) request.getAttribute("actividadesPermitidas");
+        if (permitidasStr == null || permitidasStr.trim().isEmpty()) {
+            return List.of();
+        }
+        List<String> permitidas = java.util.Arrays.stream(permitidasStr.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .toList();
+            
+        return actividades.stream()
+            .filter(act -> act.getLaborMadre() != null && permitidas.contains(act.getLaborMadre().toUpperCase()))
+            .toList();
+    }
+
+    private boolean puedeModificarRendimientos(HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        Boolean modificar = (Boolean) request.getAttribute("modificarRendimientos");
+        return modificar != null && modificar;
     }
     
     @GetMapping("/actividades/{id}")
@@ -267,7 +299,12 @@ public class AdminController {
     }
     
     @PostMapping("/rendimientos")
-    public ResponseEntity<?> createRendimiento(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> createRendimiento(HttpServletRequest httpReq, @RequestBody Map<String, Object> request) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
+        
         Rendimiento rendimiento = new Rendimiento();
         rendimiento.setRendimiento(Double.valueOf(request.get("rendimiento").toString()));
         rendimiento.setNotas((String) request.get("notes") != null ? (String) request.get("notes") : (String) request.get("notas"));
@@ -330,44 +367,49 @@ public class AdminController {
     }
     
     @PutMapping("/rendimientos/{id}")
-    public ResponseEntity<?> updateRendimiento(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> updateRendimiento(HttpServletRequest httpReq, @PathVariable Long id, @RequestBody Map<String, Object> body) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
+        
         return rendimientoRepository.findById(id)
             .map(rendimiento -> {
-                if (request.get("rendimiento") != null) {
-                    rendimiento.setRendimiento(Double.valueOf(request.get("rendimiento").toString()));
+                if (body.get("rendimiento") != null) {
+                    rendimiento.setRendimiento(Double.valueOf(body.get("rendimiento").toString()));
                 }
-                if (request.get("notas") != null) {
-                    rendimiento.setNotas((String) request.get("notas"));
+                if (body.get("notas") != null) {
+                    rendimiento.setNotas((String) body.get("notas"));
                 }
-                if (request.get("grupo") != null) {
-                    rendimiento.setGrupo((String) request.get("grupo"));
+                if (body.get("grupo") != null) {
+                    rendimiento.setGrupo((String) body.get("grupo"));
                 }
                 // Actualizar producto (cultivo)
-                if (request.get("productoId") != null) {
-                    Long productoId = Long.valueOf(request.get("productoId").toString());
+                if (body.get("productoId") != null) {
+                    Long productoId = Long.valueOf(body.get("productoId").toString());
                     productoRepository.findById(productoId).ifPresent(rendimiento::setProducto);
-                } else if (request.get("producto") instanceof Map) {
-                    Object idObj = ((Map<?,?>) request.get("producto")).get("id");
+                } else if (body.get("producto") instanceof Map) {
+                    Object idObj = ((Map<?,?>) body.get("producto")).get("id");
                     if (idObj != null) {
                         productoRepository.findById(Long.valueOf(idObj.toString())).ifPresent(rendimiento::setProducto);
                     }
                 }
                 // Actualizar actividad (labor)
-                if (request.get("actividadId") != null) {
-                    Long actividadId = Long.valueOf(request.get("actividadId").toString());
+                if (body.get("actividadId") != null) {
+                    Long actividadId = Long.valueOf(body.get("actividadId").toString());
                     actividadRepository.findById(actividadId).ifPresent(rendimiento::setActividad);
-                } else if (request.get("actividad") instanceof Map) {
-                    Object idObj = ((Map<?,?>) request.get("actividad")).get("id");
+                } else if (body.get("actividad") instanceof Map) {
+                    Object idObj = ((Map<?,?>) body.get("actividad")).get("id");
                     if (idObj != null) {
                         actividadRepository.findById(Long.valueOf(idObj.toString())).ifPresent(rendimiento::setActividad);
                     }
                 }
                 // Actualizar unidad de medida
-                if (request.get("unidadId") != null) {
-                    Long unidadId = Long.valueOf(request.get("unidadId").toString());
+                if (body.get("unidadId") != null) {
+                    Long unidadId = Long.valueOf(body.get("unidadId").toString());
                     unidadMedidaRepository.findById(unidadId).ifPresent(rendimiento::setUnidad);
-                } else if (request.get("unidad") instanceof Map) {
-                    Object idObj = ((Map<?,?>) request.get("unidad")).get("id");
+                } else if (body.get("unidad") instanceof Map) {
+                    Object idObj = ((Map<?,?>) body.get("unidad")).get("id");
                     if (idObj != null) {
                         unidadMedidaRepository.findById(Long.valueOf(idObj.toString())).ifPresent(rendimiento::setUnidad);
                     }
@@ -396,7 +438,11 @@ public class AdminController {
     }
     
     @DeleteMapping("/rendimientos/{id}")
-    public ResponseEntity<?> deleteRendimiento(@PathVariable Long id) {
+    public ResponseEntity<?> deleteRendimiento(HttpServletRequest httpReq, @PathVariable Long id) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
         return rendimientoRepository.findById(id)
             .map(rendimiento -> {
                 rendimiento.setActivo(false);
@@ -407,7 +453,11 @@ public class AdminController {
     }
     
     @DeleteMapping("/rendimientos-limpiar")
-    public ResponseEntity<?> limpiarRendimientos() {
+    public ResponseEntity<?> limpiarRendimientos(HttpServletRequest httpReq) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
         try {
             rendimientoRepository.deleteAll();
             Map<String, String> response = new HashMap<>();
@@ -451,12 +501,17 @@ public class AdminController {
     // ==================== IMPORTACIÓN DE RENDIMIENTOS ====================
     
     @PostMapping("/importar-rendimientos")
-    public ResponseEntity<?> importarRendimientos(@RequestBody(required = false) Map<String, String> request) {
+    public ResponseEntity<?> importarRendimientos(HttpServletRequest httpReq, @RequestBody(required = false) Map<String, String> body) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
+        
         try {
             // Usar ruta del request o ruta por defecto
             String rutaArchivo;
-            if (request != null && request.containsKey("rutaArchivo")) {
-                rutaArchivo = request.get("rutaArchivo");
+            if (body != null && body.containsKey("rutaArchivo")) {
+                rutaArchivo = body.get("rutaArchivo");
             } else {
                 // Ruta por defecto: archivo RENDIMIENTOS.csv en el directorio del backend
                 rutaArchivo = "RENDIMIENTOS.csv";
@@ -477,11 +532,16 @@ public class AdminController {
      * Usa el archivo cons_rendimientos.csv por defecto
      */
     @PostMapping("/importar-rendimientos-grupos")
-    public ResponseEntity<?> importarRendimientosConGrupos(@RequestBody(required = false) Map<String, String> request) {
+    public ResponseEntity<?> importarRendimientosConGrupos(HttpServletRequest httpReq, @RequestBody(required = false) Map<String, String> body) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
+        
         try {
             String rutaArchivo;
-            if (request != null && request.containsKey("rutaArchivo")) {
-                rutaArchivo = request.get("rutaArchivo");
+            if (body != null && body.containsKey("rutaArchivo")) {
+                rutaArchivo = body.get("rutaArchivo");
             } else {
                 rutaArchivo = "cons_rendimientos.csv";
             }
@@ -523,7 +583,11 @@ public class AdminController {
      * Esto actualiza las actividades existentes con el grupo del rendimiento relacionado
      */
     @PostMapping("/sync-labor-madre")
-    public ResponseEntity<?> syncLaborMadre() {
+    public ResponseEntity<?> syncLaborMadre(HttpServletRequest httpReq) {
+        if (!puedeModificarRendimientos(httpReq)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar rendimientos"));
+        }
         Map<String, Object> resultado = new HashMap<>();
         int actualizadas = 0;
         

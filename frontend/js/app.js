@@ -65,9 +65,155 @@ const App = {
         }
         return online;
     },
+     checkAuth: function() {
+        const token = localStorage.getItem('token');
+        const userStr = localStorage.getItem('user');
+        
+        if (!token || !userStr) {
+            // No autenticado: ocultar app y mostrar login
+            document.querySelector('.app-container').style.display = 'none';
+            this.showLoginOverlay();
+            return false;
+        }
+        
+        // Autenticado: mostrar app
+        document.querySelector('.app-container').style.display = 'flex';
+        const loginOverlay = document.getElementById('login-overlay');
+        if (loginOverlay) loginOverlay.remove();
+        
+        const user = JSON.parse(userStr);
+        
+        // Actualizar barra lateral según rol y permisos
+        const navUsuarios = document.getElementById('nav-usuarios');
+        if (navUsuarios) {
+            if (user.rol === 'ADMIN') {
+                navUsuarios.style.display = 'flex';
+            } else {
+                navUsuarios.style.display = 'none';
+            }
+        }
+        
+        const navRendimientos = document.getElementById('nav-rendimientos');
+        if (navRendimientos) {
+            // Si es supervisor y no puede modificar rendimientos, se oculta
+            if (user.rol === 'SUPERVISOR' && !user.modificarRendimientos) {
+                navRendimientos.style.display = 'none';
+            } else {
+                navRendimientos.style.display = 'flex';
+            }
+        }
+        
+        // Actualizar datos del footer de la barra lateral
+        const sidebarUserInfo = document.getElementById('sidebar-user-info');
+        if (sidebarUserInfo) {
+            const initials = user.username.substring(0, 2).toUpperCase();
+            const roleLabel = user.rol === 'ADMIN' ? 'Administrador' : `Supervisor (${user.actividadesPermitidas || 'Sin actividades'})`;
+            
+            sidebarUserInfo.innerHTML = `
+                <div class="avatar">${initials}</div>
+                <div class="user-details">
+                    <span class="user-name">${user.username}</span>
+                    <span class="user-role" style="font-size:0.75rem;">${roleLabel}</span>
+                    <button class="btn-logout" onclick="App.logout()">
+                        <i class="fa-solid fa-right-from-bracket"></i> Salir
+                    </button>
+                </div>
+            `;
+        }
+        
+        return true;
+    },
     
+    logout: function() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+    },
+    
+    showLoginOverlay: function() {
+        if (document.getElementById('login-overlay')) return;
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'login-overlay';
+        overlay.className = 'login-overlay';
+        
+        overlay.innerHTML = `
+            <div class="login-card">
+                <div class="login-header">
+                    <i class="fa-solid fa-leaf"></i>
+                    <h2>PYGANFLOR</h2>
+                    <p>Sistema de Control de Horas Agrícola</p>
+                </div>
+                
+                <form id="login-form">
+                    <div class="login-form-group">
+                        <label for="login-username">Usuario / Email</label>
+                        <div class="login-input-wrapper">
+                            <i class="fa-solid fa-user"></i>
+                            <input type="text" id="login-username" placeholder="Ingrese su usuario o email" required autocomplete="username">
+                        </div>
+                    </div>
+                    
+                    <div class="login-form-group" style="margin-top: 1rem;">
+                        <label for="login-password">Contraseña</label>
+                        <div class="login-input-wrapper">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" id="login-password" placeholder="Ingrese su contraseña" required autocomplete="current-password">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-login" id="btn-login-submit">
+                        <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
+                    </button>
+                </form>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-login-submit');
+            const usernameInput = document.getElementById('login-username').value.trim();
+            const passwordInput = document.getElementById('login-password').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Autenticando...';
+            
+            try {
+                const response = await api.login(usernameInput, passwordInput);
+                localStorage.setItem('token', response.token);
+                
+                // Guardar perfil del usuario
+                const userProfile = {
+                    username: response.username,
+                    email: response.email,
+                    rol: response.rol,
+                    modificarRendimientos: response.modificarRendimientos,
+                    actividadesPermitidas: response.actividadesPermitidas
+                };
+                localStorage.setItem('user', JSON.stringify(userProfile));
+                
+                showNotification(`¡Bienvenido de nuevo, ${response.username}!`, 'success');
+                
+                // Limpiar overlay y arrancar
+                overlay.remove();
+                if (this.checkAuth()) {
+                    this.navigate('dashboard');
+                    this.verificarConexionYBadge(false);
+                    this.startAlertPolling();
+                }
+            } catch (err) {
+                console.error(err);
+                showNotification(err.message || 'Credenciales inválidas', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión';
+            }
+        });
+    },
+
     init: function() {
-        // Event listeners for Navigation
+        // Event listeners para Navegación
         document.querySelectorAll('.nav-item').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -76,7 +222,7 @@ const App = {
             });
         });
         
-        // Sync button
+        // Botón de sincronización
         document.getElementById('btn-sync').addEventListener('click', async () => {
             const btn = document.getElementById('btn-sync');
             btn.disabled = true;
@@ -90,26 +236,24 @@ const App = {
                 
                 if (isOnline) {
                     showNotification('Conexión OK - Datos sincronizados con Supabase', 'success');
-                    this.navigate(this.currentView); // Refresh current view
+                    this.navigate(this.currentView); // Recargar vista actual
                 } else {
                     showNotification('Sin conexión al servidor', 'error');
                 }
             }, 800);
         });
         
-        // Initial route
-        this.navigate('dashboard');
+        // Verificar autenticación
+        if (this.checkAuth()) {
+            this.navigate('dashboard');
+            setTimeout(() => this.verificarConexionYBadge(true), 500);
+            this.startAlertPolling();
+        }
         
-        // Check connection on load
-        setTimeout(() => this.verificarConexionYBadge(true), 500);
-        
-        // Register Service Worker for PWA
+        // Registrar Service Worker para PWA
         this.registerServiceWorker();
         
-        // Start alert polling (every 5 minutes)
-        this.startAlertPolling();
-        
-        // Request notification permission
+        // Solicitar permisos de notificación
         this.requestNotificationPermission();
     },
     

@@ -1,10 +1,16 @@
 package com.finca.horas.controllers;
 
 import com.finca.horas.entities.PlanificacionDiaria;
+import com.finca.horas.entities.PlanificacionActividad;
+import com.finca.horas.repositories.ActividadRepository;
+import com.finca.horas.repositories.PlanificacionActividadRepository;
+import com.finca.horas.repositories.PlanificacionDiariaRepository;
 import com.finca.horas.services.ComparativaService;
 import com.finca.horas.services.PlanificacionDiariaService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +28,15 @@ public class ComparativaController {
 
     @Autowired
     private PlanificacionDiariaService planDiariaService;
+
+    @Autowired
+    private ActividadRepository actividadRepository;
+
+    @Autowired
+    private PlanificacionActividadRepository planActividadRepository;
+
+    @Autowired
+    private PlanificacionDiariaRepository planDiariaRepository;
 
     // ==================== COMPARATIVAS ====================
 
@@ -96,13 +111,19 @@ public class ComparativaController {
      * Body: { planificacionId: 1, fecha: "2026-03-14", horasAsignadas: 4.5, observacion: "..." }
      */
     @PostMapping("/planificacion-diaria")
-    public ResponseEntity<?> crearAsignacionDiaria(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> crearAsignacionDiaria(HttpServletRequest request, @RequestBody Map<String, Object> body) {
         try {
-            Long planificacionId = Long.valueOf(request.get("planificacionId").toString());
-            LocalDate fecha = LocalDate.parse(request.get("fecha").toString());
-            Double horasAsignadas = Double.valueOf(request.get("horasAsignadas").toString());
-            Double unidadesAsignadas = request.get("unidadesAsignadas") != null ? Double.valueOf(request.get("unidadesAsignadas").toString()) : null;
-            String observacion = request.get("observacion") != null ? request.get("observacion").toString() : null;
+            Long planificacionId = Long.valueOf(body.get("planificacionId").toString());
+            
+            if (!esPlanificacionPermitida(planificacionId, request)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Acceso denegado: No tienes permisos para planificar esta actividad"));
+            }
+
+            LocalDate fecha = LocalDate.parse(body.get("fecha").toString());
+            Double horasAsignadas = Double.valueOf(body.get("horasAsignadas").toString());
+            Double unidadesAsignadas = body.get("unidadesAsignadas") != null ? Double.valueOf(body.get("unidadesAsignadas").toString()) : null;
+            String observacion = body.get("observacion") != null ? body.get("observacion").toString() : null;
 
             PlanificacionDiaria resultado = planDiariaService.crearOActualizarAsignacion(
                 planificacionId, fecha, horasAsignadas, unidadesAsignadas, observacion);
@@ -119,14 +140,26 @@ public class ComparativaController {
      */
     @PutMapping("/planificacion-diaria/{id}")
     public ResponseEntity<?> actualizarAsignacion(
+            HttpServletRequest request,
             @PathVariable Long id,
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> body) {
         try {
-            Long planificacionId = Long.valueOf(request.get("planificacionId").toString());
-            LocalDate fecha = LocalDate.parse(request.get("fecha").toString());
-            Double horasAsignadas = Double.valueOf(request.get("horasAsignadas").toString());
-            Double unidadesAsignadas = request.get("unidadesAsignadas") != null ? Double.valueOf(request.get("unidadesAsignadas").toString()) : null;
-            String observacion = request.get("observacion") != null ? request.get("observacion").toString() : null;
+            if (!esAsignacionDiariaPermitida(id, request)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar esta planificación diaria"));
+            }
+
+            Long planificacionId = Long.valueOf(body.get("planificacionId").toString());
+            
+            if (!esPlanificacionPermitida(planificacionId, request)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Acceso denegado: No tienes permisos para reasignar a esta actividad"));
+            }
+
+            LocalDate fecha = LocalDate.parse(body.get("fecha").toString());
+            Double horasAsignadas = Double.valueOf(body.get("horasAsignadas").toString());
+            Double unidadesAsignadas = body.get("unidadesAsignadas") != null ? Double.valueOf(body.get("unidadesAsignadas").toString()) : null;
+            String observacion = body.get("observacion") != null ? body.get("observacion").toString() : null;
 
             PlanificacionDiaria resultado = planDiariaService.crearOActualizarAsignacion(
                 planificacionId, fecha, horasAsignadas, unidadesAsignadas, observacion);
@@ -142,7 +175,11 @@ public class ComparativaController {
      * DELETE /api/planificacion-diaria/{id}
      */
     @DeleteMapping("/planificacion-diaria/{id}")
-    public ResponseEntity<Void> eliminarAsignacion(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarAsignacion(HttpServletRequest request, @PathVariable Long id) {
+        if (!esAsignacionDiariaPermitida(id, request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para eliminar esta planificación diaria"));
+        }
         planDiariaService.eliminarAsignacion(id);
         return ResponseEntity.noContent().build();
     }
@@ -155,5 +192,57 @@ public class ComparativaController {
     public Map<String, Double> obtenerHorasDisponibles(@PathVariable Long planificacionId) {
         Double disponibles = planDiariaService.obtenerHorasDisponibles(planificacionId);
         return Map.of("horasDisponibles", disponibles);
+    }
+
+    // Helpers de validación de permisos
+    private boolean esActividadPermitida(Long actividadId, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        if (actividadId == null) {
+            return false;
+        }
+        String laborMadre = actividadRepository.findById(actividadId)
+            .map(act -> act.getLaborMadre())
+            .orElse(null);
+        if (laborMadre == null) {
+            return false;
+        }
+        String permitidasStr = (String) request.getAttribute("actividadesPermitidas");
+        if (permitidasStr == null || permitidasStr.trim().isEmpty()) {
+            return false;
+        }
+        List<String> permitidas = java.util.Arrays.stream(permitidasStr.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .toList();
+        return permitidas.contains(laborMadre.toUpperCase());
+    }
+
+    private boolean esPlanificacionPermitida(Long planId, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        if (planId == null) {
+            return false;
+        }
+        return planActividadRepository.findById(planId)
+            .map(p -> p.getActividad() != null && esActividadPermitida(p.getActividad().getId(), request))
+            .orElse(false);
+    }
+
+    private boolean esAsignacionDiariaPermitida(Long asignacionId, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        if (asignacionId == null) {
+            return false;
+        }
+        return planDiariaRepository.findById(asignacionId)
+            .map(pd -> pd.getPlanificacion() != null && esPlanificacionPermitida(pd.getPlanificacion().getId(), request))
+            .orElse(false);
     }
 }

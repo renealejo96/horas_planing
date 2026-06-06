@@ -2,7 +2,9 @@ package com.finca.horas.controllers;
 
 import com.finca.horas.entities.*;
 import com.finca.horas.repositories.*;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
@@ -36,7 +38,7 @@ public class PlanificacionLaborController {
      * Agrupa actividades similares (ej: Desbrote 1, Desbrote 2 → Desbrote)
      */
     @GetMapping("/labores")
-    public ResponseEntity<List<Map<String, Object>>> getLaboresMadre() {
+    public ResponseEntity<?> getLaboresMadre(HttpServletRequest request) {
         List<String> labores = rendimientoRepository.findDistinctLabores();
         
         // Agrupar labores por su nombre base (sin números ni variantes)
@@ -58,7 +60,15 @@ public class PlanificacionLaborController {
             })
             .collect(Collectors.toList());
         
-        return ResponseEntity.ok(resultado);
+        // Filtrar según actividades permitidas del usuario
+        List<Map<String, Object>> filtrado = resultado.stream()
+            .filter(item -> {
+                String nombre = (String) item.get("nombre");
+                return esGrupoPermitido(nombre, request);
+            })
+            .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(filtrado);
     }
     
     /**
@@ -248,9 +258,42 @@ public class PlanificacionLaborController {
      * Solo retorna grupos que tienen al menos un rendimiento válido
      */
     @GetMapping("/grupos")
-    public ResponseEntity<List<String>> getGrupos() {
+    public ResponseEntity<List<String>> getGrupos(HttpServletRequest request) {
         List<String> grupos = rendimientoRepository.findDistinctGrupos();
-        return ResponseEntity.ok(grupos);
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return ResponseEntity.ok(grupos);
+        }
+        String permitidasStr = (String) request.getAttribute("actividadesPermitidas");
+        if (permitidasStr == null || permitidasStr.trim().isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<String> permitidas = java.util.Arrays.stream(permitidasStr.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .toList();
+            
+        List<String> filtrados = grupos.stream()
+            .filter(g -> permitidas.contains(g.toUpperCase()))
+            .collect(Collectors.toList());
+            
+        return ResponseEntity.ok(filtrados);
+    }
+
+    private boolean esGrupoPermitido(String grupo, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        String permitidasStr = (String) request.getAttribute("actividadesPermitidas");
+        if (permitidasStr == null || permitidasStr.trim().isEmpty()) {
+            return false;
+        }
+        List<String> permitidas = java.util.Arrays.stream(permitidasStr.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .toList();
+        return permitidas.contains(grupo.toUpperCase());
     }
 
     /**

@@ -177,9 +177,7 @@ App.registerView('dashboard', async () => {
         });
     } catch (e) {
         console.log('Error cargando dashboard:', e);
-    }
-    
-    // Agrupar horas por labor madre
+     // Agrupar horas por labor madre
     const agruparPorLaborMadre = (items) => {
         const grupos = {};
         items.forEach(p => {
@@ -200,6 +198,59 @@ App.registerView('dashboard', async () => {
     
     const gruposActual = agruparPorLaborMadre(planificacion);
     const gruposProxima = agruparPorLaborMadre(planificacionProxima);
+
+    // Crear lista unificada de labores madre para el desglose
+    const todasLasLaboresSet = new Set([
+        ...Object.keys(gruposActual),
+        ...Object.keys(ejecucionesPorLabor)
+    ]);
+    const todasLasLabores = Array.from(todasLasLaboresSet).sort();
+
+    // Renderizar desglose de planificadas
+    const renderDesglosePlanificadas = () => {
+        if (todasLasLabores.length === 0) {
+            return '<p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem; text-align:center;">Sin labores</p>';
+        }
+        return `
+            <div style="background:rgba(0,0,0,0.25); border: 1px solid rgba(59,130,246,0.15); border-radius:8px; padding:0.6rem; margin-top:0.75rem; text-align:left; max-width:240px; margin-left:auto; margin-right:auto;">
+                <div style="font-size:0.7rem; font-weight:700; color:#93C5FD; border-bottom:1px solid rgba(59,130,246,0.2); padding-bottom:0.3rem; margin-bottom:0.4rem; letter-spacing:0.5px;">DESGLOSE PLANIFICADO</div>
+                ${todasLasLabores.map(labor => {
+                    const plan = gruposActual[labor]?.planificadas || 0;
+                    return `
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; margin:0.35rem 0;">
+                            <span style="color:var(--text-muted); text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:0.5rem;" title="${labor}">
+                                <i class="fa-solid fa-folder-open" style="color:#3B82F6; font-size:0.7rem; margin-right:0.3rem;"></i>${labor}
+                            </span>
+                            <span style="font-weight:600; color:white; white-space:nowrap;">${plan.toFixed(1)}h</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    };
+
+    // Renderizar desglose de ejecutadas
+    const renderDesgloseEjecutadas = () => {
+        if (todasLasLabores.length === 0) {
+            return '<p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem; text-align:center;">Sin labores</p>';
+        }
+        return `
+            <div style="background:rgba(0,0,0,0.25); border: 1px solid rgba(16,185,129,0.15); border-radius:8px; padding:0.6rem; margin-top:0.75rem; text-align:left; max-width:240px; margin-left:auto; margin-right:auto;">
+                <div style="font-size:0.7rem; font-weight:700; color:#A7F3D0; border-bottom:1px solid rgba(16,185,129,0.2); padding-bottom:0.3rem; margin-bottom:0.4rem; letter-spacing:0.5px;">DESGLOSE EJECUTADO</div>
+                ${todasLasLabores.map(labor => {
+                    const ejec = ejecucionesPorLabor[labor] || 0;
+                    return `
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; margin:0.35rem 0;">
+                            <span style="color:var(--text-muted); text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:0.5rem;" title="${labor}">
+                                <i class="fa-solid fa-clipboard-check" style="color:#10B981; font-size:0.7rem; margin-right:0.3rem;"></i>${labor}
+                            </span>
+                            <span style="font-weight:600; color:white; white-space:nowrap;">${ejec.toFixed(1)}h</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    };
     
     // Calcular horas
     const horasPlanificadas = planificacion.reduce((sum, p) => sum + (p.horasAjustadas || p.horasCalculadas || 0), 0);
@@ -249,11 +300,11 @@ App.registerView('dashboard', async () => {
             </div>
 
             <!-- VELOCÍMETRO DE HORAS - Indicador Principal -->
-            <div class="card" style="margin-bottom:1.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); border: 1px solid rgba(255,255,255,0.1);">
+            <div class="card" style="margin-bottom:1.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); border: 1px solid rgba(255,255,255,0.15);">
                 <div style="display:grid; grid-template-columns: 1fr 300px 1fr; gap:2rem; align-items:center;">
                     
                     <!-- Info Izquierda -->
-                    <div style="text-align:center;">
+                    <div style="text-align:center; align-self:start;">
                         <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.5rem;">
                             <i class="fa-solid fa-calendar-check"></i> HORAS PLANIFICADAS
                         </div>
@@ -261,10 +312,13 @@ App.registerView('dashboard', async () => {
                             ${horasPlanificadas.toFixed(1)}
                         </div>
                         <div style="font-size:0.85rem; color:var(--text-muted);">horas esta semana</div>
+                        
+                        <!-- DESGLOSE DE HORAS PLANIFICADAS -->
+                        ${renderDesglosePlanificadas()}
                     </div>
                     
                     <!-- Velocímetro Central -->
-                    <div style="position:relative; width:280px; height:180px; margin:0 auto;">
+                    <div style="position:relative; width:280px; height:180px; margin:0 auto; align-self:center;">
                         <!-- Fondo del gauge -->
                         <svg viewBox="0 0 200 120" style="width:100%; height:100%;">
                             <!-- Arco de fondo -->
@@ -300,7 +354,7 @@ App.registerView('dashboard', async () => {
                     </div>
                     
                     <!-- Info Derecha -->
-                    <div style="text-align:center;">
+                    <div style="text-align:center; align-self:start;">
                         <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.5rem;">
                             <i class="fa-solid fa-clipboard-check"></i> HORAS EJECUTADAS
                         </div>
@@ -308,6 +362,9 @@ App.registerView('dashboard', async () => {
                             ${horasEjecutadas.toFixed(1)}
                         </div>
                         <div style="font-size:0.85rem; color:var(--text-muted);">horas registradas</div>
+                        
+                        <!-- DESGLOSE DE HORAS EJECUTADAS -->
+                        ${renderDesgloseEjecutadas()}
                     </div>
                 </div>
                 

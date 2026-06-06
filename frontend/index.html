@@ -52,13 +52,16 @@
                 <a href="#" class="nav-item" data-view="personal">
                     <i class="fa-solid fa-users"></i> Personal
                 </a>
-                <a href="#" class="nav-item" data-view="rendimientos">
+                <a href="#" class="nav-item" data-view="rendimientos" id="nav-rendimientos">
                     <i class="fa-solid fa-tachometer-alt"></i> Rendimientos
+                </a>
+                <a href="#" class="nav-item" data-view="usuarios" id="nav-usuarios" style="display:none;">
+                    <i class="fa-solid fa-user-shield"></i> Usuarios
                 </a>
             </nav>
 
             <div class="sidebar-footer">
-                <div class="user-info">
+                <div class="user-info" id="sidebar-user-info">
                     <div class="avatar">AD</div>
                     <div class="user-details">
                         <span class="user-name">Administrador</span>
@@ -99,6 +102,7 @@
     <script src="js/views/comparativa.js"></script>
     <script src="js/views/personal.js"></script>
     <script src="js/views/rendimientos.js"></script>
+    <script src="js/views/usuarios.js"></script>
     <script>
         // Iniciar la app después de que todas las vistas estén registradas
         document.addEventListener('DOMContentLoaded', () => {

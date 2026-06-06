@@ -2,8 +2,13 @@ package com.finca.horas.controllers;
 
 import com.finca.horas.entities.PlanificacionActividad;
 import com.finca.horas.entities.Semana;
+import com.finca.horas.entities.Actividad;
+import com.finca.horas.repositories.ActividadRepository;
+import com.finca.horas.repositories.PlanificacionActividadRepository;
 import com.finca.horas.services.PlanificacionService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +22,12 @@ public class PlanificacionController {
 
     @Autowired
     private PlanificacionService planificacionService;
+
+    @Autowired
+    private ActividadRepository actividadRepository;
+
+    @Autowired
+    private PlanificacionActividadRepository planActividadRepository;
 
     // ==================== SEMANAS ====================
 
@@ -94,24 +105,76 @@ public class PlanificacionController {
     }
 
     @PostMapping("/actividades")
-    public PlanificacionActividad planificarActividad(@RequestBody PlanificacionActividad act) {
-        return planificacionService.planificarActividad(act);
+    public ResponseEntity<?> planificarActividad(HttpServletRequest request, @RequestBody PlanificacionActividad act) {
+        if (act.getActividad() == null || !esActividadPermitida(act.getActividad().getId(), request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para planificar esta actividad"));
+        }
+        return ResponseEntity.ok(planificacionService.planificarActividad(act));
     }
     
     @PutMapping("/actividades/{id}")
-    public ResponseEntity<PlanificacionActividad> actualizarPlanificacion(
+    public ResponseEntity<?> actualizarPlanificacion(
+            HttpServletRequest request,
             @PathVariable Long id, 
             @RequestBody PlanificacionActividad act) {
+        if (!esPlanificacionPermitida(id, request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para modificar esta planificación"));
+        }
         return planificacionService.actualizarPlanificacion(id, act)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
     }
     
     @DeleteMapping("/actividades/{id}")
-    public ResponseEntity<?> eliminarPlanificacion(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarPlanificacion(HttpServletRequest request, @PathVariable Long id) {
+        if (!esPlanificacionPermitida(id, request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: No tienes permisos para eliminar esta planificación"));
+        }
         if (planificacionService.eliminarPlanificacion(id)) {
             return ResponseEntity.ok().build();
         }
         return ResponseEntity.notFound().build();
+    }
+
+    // Helpers de validación de permisos
+    private boolean esActividadPermitida(Long actividadId, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        if (actividadId == null) {
+            return false;
+        }
+        String laborMadre = actividadRepository.findById(actividadId)
+            .map(Actividad::getLaborMadre)
+            .orElse(null);
+        if (laborMadre == null) {
+            return false;
+        }
+        String permitidasStr = (String) request.getAttribute("actividadesPermitidas");
+        if (permitidasStr == null || permitidasStr.trim().isEmpty()) {
+            return false;
+        }
+        List<String> permitidas = java.util.Arrays.stream(permitidasStr.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .toList();
+        return permitidas.contains(laborMadre.toUpperCase());
+    }
+
+    private boolean esPlanificacionPermitida(Long planId, HttpServletRequest request) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return true;
+        }
+        if (planId == null) {
+            return false;
+        }
+        return planActividadRepository.findById(planId)
+            .map(p -> p.getActividad() != null && esActividadPermitida(p.getActividad().getId(), request))
+            .orElse(false);
     }
 }

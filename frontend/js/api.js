@@ -3,20 +3,40 @@ const API_BASE = '/api';
 const api = {
     async request(endpoint, method = 'GET', body = null) {
         try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
             const options = {
                 method,
-                headers: { 'Content-Type': 'application/json' }
+                headers
             };
             if (body) options.body = JSON.stringify(body);
             
             const response = await fetch(`${API_BASE}${endpoint}`, options);
-            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+            if (response.status === 401) {
+                // Token inválido o expirado
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                showNotification('Sesión expirada. Por favor inicie sesión.', 'error');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+                throw new Error('Sesión expirada');
+            }
+            
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `API Error: ${response.statusText}`);
+            }
             
             const text = await response.text();
             return text ? JSON.parse(text) : {};
         } catch (error) {
             console.error('Network Error:', error);
-            showNotification('Error de conexión con el servidor', 'error');
+            showNotification(error.message || 'Error de conexión con el servidor', 'error');
             throw error;
         }
     },
@@ -98,6 +118,14 @@ const api = {
     getRendimientoLabor: (laborNombre, productoCodigo) => api.request(`/planificacion/rendimiento/${encodeURIComponent(laborNombre)}/${encodeURIComponent(productoCodigo)}`),
     getCultivosCosecha: () => api.request('/planificacion/cosecha/cultivos'),
     calcularHorasCosecha: (data) => api.request('/planificacion/cosecha/calcular', 'POST', data),
+    
+    // ========== Autenticación y Usuarios ==========
+    login: (username, password) => api.request('/auth/login', 'POST', { username, password }),
+    getMe: () => api.request('/auth/me'),
+    getUsuarios: () => api.request('/admin/usuarios'),
+    createUsuario: (data) => api.request('/admin/usuarios', 'POST', data),
+    updateUsuario: (id, data) => api.request(`/admin/usuarios/${id}`, 'PUT', data),
+    deleteUsuario: (id) => api.request(`/admin/usuarios/${id}`, 'DELETE'),
     
     // ========== Health Check ==========
     async post(endpoint, body = null) {
