@@ -228,6 +228,14 @@ App.registerView('ejecucion', async () => {
         
         const rendimientoReal = unidadesReales / horasReales;
         
+        const btn = document.querySelector(`button[onclick="guardarEjecucionLinea(${planId})"]`);
+        let originalHtml = '';
+        if (btn) {
+            originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        }
+        
         try {
             await api.createEjecucion({
                 planificacion: { id: planId },
@@ -242,6 +250,10 @@ App.registerView('ejecucion', async () => {
             App.navigate('ejecucion');
         } catch (e) {
             showNotification('Error al guardar ejecución', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
     };
 
@@ -295,12 +307,25 @@ App.registerView('ejecucion', async () => {
             return;
         }
 
+        const btn = document.querySelector('button[onclick="guardarTodoEjecucion()"]');
+        let originalHtml = '';
+        if (btn) {
+            originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> GUARDANDO AVANCES...';
+        }
+        showNotification('Guardando avances de ejecución...', 'info');
+
         try {
             await Promise.all(promesas);
             showNotification(`✓ ${creados} registros de ejecución guardados`, 'success');
             App.navigate('ejecucion');
         } catch (e) {
             showNotification('Error al guardar ejecuciones en lote', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
     };
 
@@ -413,6 +438,14 @@ App.registerView('ejecucion', async () => {
             return;
         }
 
+        const btn = document.querySelector('button[onclick="guardarEditarEjecucion()"]');
+        let originalHtml = '';
+        if (btn) {
+            originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+        }
+
         try {
             await api.updateEjecucion(id, {
                 fecha,
@@ -425,6 +458,10 @@ App.registerView('ejecucion', async () => {
             App.navigate('ejecucion');
         } catch (e) {
             showNotification('Error al actualizar ejecución', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
     };
 

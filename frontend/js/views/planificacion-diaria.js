@@ -166,6 +166,14 @@ App.registerView('planificacion-diaria', async () => {
             }
         }
 
+        const btn = document.querySelector(`button[onclick="guardarAsignacionDiaria(${planificacionId})"]`);
+        let originalHtml = '';
+        if (btn) {
+            originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        }
+
         try {
             await api.crearPlanDiario({
                 planificacionId: planificacionId,
@@ -183,6 +191,10 @@ App.registerView('planificacion-diaria', async () => {
             App.navigate('planificacion-diaria');
         } catch (e) {
             showNotification('Error al guardar asignación', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
     };
     
@@ -239,6 +251,15 @@ App.registerView('planificacion-diaria', async () => {
             showNotification('No hay nuevas asignaciones ingresadas para guardar.', 'info');
             return;
         }
+
+        const btn = document.querySelector('button[onclick="guardarTodoDiario()"]');
+        let originalHtml = '';
+        if (btn) {
+            originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> GUARDANDO ASIGNACIONES...';
+        }
+        showNotification('Guardando asignaciones...', 'info');
         
         try {
             await Promise.all(promesas);
@@ -251,6 +272,10 @@ App.registerView('planificacion-diaria', async () => {
             App.navigate('planificacion-diaria');
         } catch (e) {
             showNotification('Error guardando en lote', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
         }
     };
     
