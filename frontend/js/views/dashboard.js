@@ -177,7 +177,9 @@ App.registerView('dashboard', async () => {
         });
     } catch (e) {
         console.log('Error cargando dashboard:', e);
-     // Agrupar horas por labor madre
+    }
+    
+    // Agrupar horas por labor madre
     const agruparPorLaborMadre = (items) => {
         const grupos = {};
         items.forEach(p => {
