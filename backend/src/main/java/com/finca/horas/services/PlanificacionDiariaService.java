@@ -70,13 +70,14 @@ public class PlanificacionDiariaService {
             horasYaAsignadas -= existente.get().getHorasAsignadas();
         }
 
-        Double horasDisponibles = horasSemanales - horasYaAsignadas;
+        // Double horasDisponibles = horasSemanales - horasYaAsignadas;
         
-        if (horasAsignadas > horasDisponibles) {
-            throw new IllegalArgumentException(
-                String.format("Horas solicitadas (%.1f) exceden las disponibles (%.1f) para esta actividad", 
-                    horasAsignadas, horasDisponibles));
-        }
+        // Remove strict restriction to allow flexible daily scheduling (e.g. for weekends or adjustments)
+        // if (horasAsignadas > horasDisponibles) {
+        //     throw new IllegalArgumentException(
+        //         String.format("Horas solicitadas (%.1f) exceden las disponibles (%.1f) para esta actividad", 
+        //             horasAsignadas, horasDisponibles));
+        // }
 
         // Crear o actualizar
         PlanificacionDiaria planDiaria;
