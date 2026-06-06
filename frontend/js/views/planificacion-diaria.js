@@ -5,7 +5,7 @@ App.registerView('planificacion-diaria', async () => {
 
     // Cargar datos
     let semanaSeleccionada = null, semanaActual = null, todasLasSemanas = [];
-    let planificacionItems = [], planificacionDiaria = [], areas = [], rendimientosGlobales = [], ejecucionesSemana = [];
+    let planificacionItems = [], planificacionDiaria = [], areas = [], rendimientosGlobales = [], ejecucionesSemana = [], allPlanificacionDiariaSemana = [];
     let actividades = [], productos = [];
     let planDiarioPorPlan = {}; // Mapeo rápido de id_planificacion -> objeto_plan_diario
     let grupoActivo = null;
@@ -49,10 +49,11 @@ App.registerView('planificacion-diaria', async () => {
         }) || semanaActual;
         
         if (semanaSeleccionada) {
-            [planificacionItems, planificacionDiaria, ejecucionesSemana] = await Promise.all([
+            [planificacionItems, planificacionDiaria, ejecucionesSemana, allPlanificacionDiariaSemana] = await Promise.all([
                 api.getPlanificacionSemana(semanaSeleccionada.codigoAass).catch(() => []),
                 api.getPlanDiarioFecha(fechaSeleccionada).catch(() => []),
-                api.getEjecucionesSemana(semanaSeleccionada.codigoAass).catch(() => [])  // solo de esta semana
+                api.getEjecucionesSemana(semanaSeleccionada.codigoAass).catch(() => []),  // solo de esta semana
+                api.getPlanDiarioSemana(semanaSeleccionada.codigoAass).catch(() => [])
             ]);
             
             // Mapeo rápido para verificar asignaciones ya hechas
@@ -127,6 +128,7 @@ App.registerView('planificacion-diaria', async () => {
     };
 
     // Función para guardar asignación diaria
+    // Función para guardar asignación diaria
     window.guardarAsignacionDiaria = async (planificacionId) => {
         const inputUni = document.getElementById(`uni-dia-${planificacionId}`);
         const inputHrs = document.getElementById(`hrs-dia-${planificacionId}`);
@@ -140,6 +142,30 @@ App.registerView('planificacion-diaria', async () => {
             return;
         }
 
+        // Buscar planificacion semanal para avisar si se excede el plan
+        const p = planificacionItems.find(item => item.id === planificacionId);
+        let superoPlan = false;
+        if (p) {
+            const isCosecha = grupoActivo === 'COSECHA';
+            const productoCodigo = p.actividad?.producto?.codigo;
+            const tallosMalla = p.actividad?.producto?.tallosPorMalla || TALLOS_POR_MALLA[productoCodigo] || 25;
+            const rendOriginal = p.rendimientoUsado || 1;
+
+            const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
+            const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+
+            const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
+                const pid = pd.planificacionId || pd.planificacion?.id;
+                return pid === planificacionId && pd.fecha !== fechaSeleccionada;
+            });
+            const horasOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
+            const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+
+            if ((horasOtrosDias + horasAsignadas) > horasSemanales || (unidadesOtrosDias + unidadesAsignadas) > unidadesSemanales) {
+                superoPlan = true;
+            }
+        }
+
         try {
             await api.crearPlanDiario({
                 planificacionId: planificacionId,
@@ -149,6 +175,11 @@ App.registerView('planificacion-diaria', async () => {
                 observacion: inputObs?.value || null
             });
             showNotification(`✓ Asignado para ${fechaSeleccionada}`, 'success');
+            if (superoPlan) {
+                setTimeout(() => {
+                    showNotification('⚠️ ¡Atención! Esta asignación supera las horas o unidades semanales planificadas.', 'warning');
+                }, 1000);
+            }
             App.navigate('planificacion-diaria');
         } catch (e) {
             showNotification('Error al guardar asignación', 'error');
@@ -159,6 +190,7 @@ App.registerView('planificacion-diaria', async () => {
         const itemsFiltrados = planificacionItems.filter(p => p.grupoCalculado === grupoActivo);
         const promesas = [];
         let creados = 0;
+        let superoPlan = false;
         
         for (const p of itemsFiltrados) {
             const planExistente = planDiarioPorPlan[p.id];
@@ -172,6 +204,26 @@ App.registerView('planificacion-diaria', async () => {
             let horasAsignadas = parseFloat(inputHrs?.value) || 0;
             
             if (horasAsignadas > 0 || unidadesAsignadas > 0) {
+                // Verificar si supera presupuesto semanal
+                const isCosecha = grupoActivo === 'COSECHA';
+                const productoCodigo = p.actividad?.producto?.codigo;
+                const tallosMalla = p.actividad?.producto?.tallosPorMalla || TALLOS_POR_MALLA[productoCodigo] || 25;
+                const rendOriginal = p.rendimientoUsado || 1;
+
+                const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
+                const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+
+                const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
+                    const pid = pd.planificacionId || pd.planificacion?.id;
+                    return pid === p.id && pd.fecha !== fechaSeleccionada;
+                });
+                const horasOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
+                const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+
+                if ((horasOtrosDias + horasAsignadas) > horasSemanales || (unidadesOtrosDias + unidadesAsignadas) > unidadesSemanales) {
+                    superoPlan = true;
+                }
+
                 promesas.push(api.crearPlanDiario({
                     planificacionId: p.id,
                     fecha: fechaSeleccionada,
@@ -191,6 +243,11 @@ App.registerView('planificacion-diaria', async () => {
         try {
             await Promise.all(promesas);
             showNotification(`✓ ${creados} asignaciones guardadas exitosamente`, 'success');
+            if (superoPlan) {
+                setTimeout(() => {
+                    showNotification('⚠️ ¡Atención! Algunas de las asignaciones guardadas superan los totales semanales planificados.', 'warning');
+                }, 1000);
+            }
             App.navigate('planificacion-diaria');
         } catch (e) {
             showNotification('Error guardando en lote', 'error');
@@ -334,10 +391,28 @@ App.registerView('planificacion-diaria', async () => {
                                     
                                     const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
                                     const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
-                                    const horasYaEjecutadas = (p.horasEjecutadas || 0);
-                                    const horasPendientes = Math.max(0, horasSemanales - horasYaEjecutadas);
-                                    const unidadesPendientes = Math.max(0, unidadesSemanales - (p.unidadesEjecutadas || 0));
-                                    
+
+                                    // Calcular asignaciones previas de la misma semana (días anteriores)
+                                    const asignacionesPrevias = allPlanificacionDiariaSemana.filter(pd => {
+                                        const pid = pd.planificacionId || pd.planificacion?.id;
+                                        return pid === p.id && pd.fecha < fechaSeleccionada;
+                                    });
+                                    const horasAsignadasPrevias = asignacionesPrevias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
+                                    const unidadesAsignadasPrevias = asignacionesPrevias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+
+                                    const horasDisponiblesDia = horasSemanales - horasAsignadasPrevias;
+                                    const unidadesDisponiblesDia = unidadesSemanales - unidadesAsignadasPrevias;
+
+                                    const esExcedido = unidadesDisponiblesDia < 0 || horasDisponiblesDia < 0;
+
+                                    const badgeDisponible = esExcedido 
+                                        ? `<div style="font-size:0.7rem; color:#FCA5A5; background:rgba(239, 68, 68, 0.15); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block; font-weight:bold;">
+                                            <i class="fa-solid fa-triangle-exclamation"></i> Excedido: ${Math.round(Math.abs(unidadesDisponiblesDia)).toLocaleString()} ${unidadPlaceholder} (${Math.abs(horasDisponiblesDia).toFixed(1)}h)
+                                           </div>`
+                                        : `<div style="font-size:0.7rem; color:#A7F3D0; background:rgba(16, 185, 129, 0.15); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block;">
+                                            Disponible: <strong>${Math.round(unidadesDisponiblesDia).toLocaleString()}</strong> ${unidadPlaceholder} (<strong>${horasDisponiblesDia.toFixed(1)}h</strong>)
+                                           </div>`;
+
                                     return `
                                         <tr style="border-top:1px solid rgba(255,255,255,0.03); transition: background 0.2s;">
                                             <td style="padding:0.7rem; text-align:center; color:var(--text-muted); font-size:0.75rem;">${rowCounter}</td>
@@ -345,15 +420,15 @@ App.registerView('planificacion-diaria', async () => {
                                             <td style="padding:0.7rem; text-align:center;">
                                                 <div style="color:var(--text-muted); font-size:0.8rem;">${unidadesSemanales.toLocaleString()} ${unidadPlaceholder}</div>
                                                 <div style="font-size:0.7rem; opacity:0.6;">${horasSemanales.toFixed(1)}h plan</div>
-                                                ${horasPendientes > 0 && horasPendientes < horasSemanales ? `<div style="font-size:0.65rem; color:#F59E0B; font-weight:bold;">Restante: ${horasPendientes.toFixed(1)}h (${Math.round(unidadesPendientes).toLocaleString()} ${unidadPlaceholder})</div>` : ''}
+                                                ${badgeDisponible}
                                             </td>
                                             <td style="padding:0.7rem;">
-                                                <input type="number" id="uni-dia-${p.id}" placeholder="${unidadPlaceholder}" onfocus="this.select()"
+                                                <input type="number" id="uni-dia-${p.id}" placeholder="${Math.max(0, Math.round(unidadesDisponiblesDia))}" onfocus="this.select()"
                                                     oninput="calcHorasDiarias(${p.id}, ${isCosecha}, ${tallosMalla}, ${rendOriginal})"
                                                     style="width:100%; padding:0.4rem; background:#1E293B; border:1px solid rgba(255,255,255,0.15); color:white; border-radius:6px; text-align:center; font-weight:700;">
                                             </td>
                                             <td style="padding:0.7rem;">
-                                                <input type="number" id="hrs-dia-${p.id}" placeholder="Hrs" step="0.5" readonly
+                                                <input type="number" id="hrs-dia-${p.id}" placeholder="${Math.max(0, horasDisponiblesDia).toFixed(1)}h" step="0.5" readonly
                                                     style="width:100%; padding:0.4rem; background:transparent; border:none; color:#94A3B8; text-align:center; font-weight:600;">
                                             </td>
                                             <td style="padding:0.7rem;">
