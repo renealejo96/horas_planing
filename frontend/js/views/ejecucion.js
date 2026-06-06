@@ -249,7 +249,9 @@ App.registerView('ejecucion', async () => {
     window.guardarTodoEjecucion = async () => {
         const elementosParaMostrar = planDiarioArr.filter(pd => {
             const p = pd.planificacion;
-            return p && p.grupoCalculado === grupoActivo;
+            if (!p || p.grupoCalculado !== grupoActivo) return false;
+            const hasEjec = ejecuciones.some(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
+            return !hasEjec;
         });
 
         const promesas = [];
@@ -303,12 +305,95 @@ App.registerView('ejecucion', async () => {
     };
 
     // Modal de edición de ejecuciones
-    window.abrirModalEditarEjecucion = (id, fecha, horas, unidades, observacion) => {
+    window.abrirModalEditarEjecucion = async (id, fecha, horas, unidades, observacion) => {
         document.getElementById('edit-ejec-id').value = id;
         document.getElementById('edit-ejec-fecha').value = fecha;
         document.getElementById('edit-ejec-horas').value = horas;
         document.getElementById('edit-ejec-unidades').value = unidades;
         document.getElementById('edit-ejec-observacion').value = observacion || '';
+
+        const unidadesInput = document.getElementById('edit-ejec-unidades');
+
+        // Buscar ejecución en el arreglo local
+        const ejec = ejecuciones.find(e => e.id == id);
+        const p = ejec?.planificacion;
+        const act = ejec?.actividad || p?.actividad;
+        const rawName = (act?.laborMadre || act?.grupo || act?.nombre || '').toUpperCase();
+        const isCosecha = rawName.includes('COSECHA');
+
+        if (isCosecha) {
+            // Configurar input como de solo lectura
+            unidadesInput.readOnly = true;
+            unidadesInput.style.background = 'rgba(255,255,255,0.05)';
+            unidadesInput.style.border = '1px solid rgba(255,255,255,0.1)';
+            unidadesInput.style.color = '#94A3B8';
+            unidadesInput.style.cursor = 'not-allowed';
+            unidadesInput.tabIndex = -1;
+
+            // Mostrar estado de carga
+            unidadesInput.value = '';
+            unidadesInput.placeholder = 'Cargando tallos actualizados...';
+
+            try {
+                const weekCode = ejec?.semana?.codigoAass || semanaActual?.codigoAass;
+                if (!weekCode) {
+                    throw new Error('No hay semana asociada');
+                }
+
+                const pdcto = p?.producto || p?.actividad?.producto || ejec?.actividad?.producto;
+                const rowProdCodigo = String(pdcto?.codigo || '').toUpperCase().trim();
+
+                if (!rowProdCodigo) {
+                    throw new Error('No hay producto asociado');
+                }
+
+                const url = `/api/ejecucion/cosechas-externas?semana=${encodeURIComponent(weekCode)}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Status: ${response.status}`);
+                }
+                const data = await response.json();
+                const registros = data.datos || [];
+
+                // Sumar tallos para la fecha del registro y el producto exacto
+                let totalCosechado = 0;
+                let foundMatch = false;
+                registros.forEach(r => {
+                    if (r.fecha === fecha) {
+                        const prod = String(r.producto_maestro || '').toUpperCase().trim();
+                        if (prod === rowProdCodigo) {
+                            const tallos = parseFloat(r.total_tallos || r.cantidad || r.unidades || 0);
+                            totalCosechado += tallos;
+                            foundMatch = true;
+                        }
+                    }
+                });
+
+                if (foundMatch) {
+                    unidadesInput.value = totalCosechado;
+                    showNotification(`✓ Tallos actualizados desde API: ${totalCosechado}`, 'success');
+                } else {
+                    unidadesInput.value = unidades;
+                    unidadesInput.placeholder = '';
+                    showNotification('No se encontraron cosechas actualizadas en la API para esta fecha/producto. Se mantiene el valor actual.', 'warning');
+                }
+            } catch (err) {
+                console.error('Error fetching updated harvest data for edit:', err);
+                unidadesInput.value = unidades;
+                unidadesInput.placeholder = '';
+                showNotification('Error al consultar cosechas de la API. Se mantiene el valor original.', 'warning');
+            }
+        } else {
+            // Actividad normal
+            unidadesInput.readOnly = false;
+            unidadesInput.style.background = '#0F172A';
+            unidadesInput.style.border = '1px solid rgba(255,255,255,0.15)';
+            unidadesInput.style.color = 'white';
+            unidadesInput.style.cursor = 'auto';
+            unidadesInput.tabIndex = 0;
+            unidadesInput.placeholder = '';
+        }
+
         document.getElementById('modal-edit-ejecucion').style.display = 'flex';
     };
 
@@ -616,7 +701,11 @@ App.registerView('ejecucion', async () => {
     window.renderPlanificacionParaEjecutar = () => {
         const elementosParaMostrar = planDiarioArr.filter(pd => {
             const p = pd.planificacion;
-            return p && p.grupoCalculado === grupoActivo;
+            if (!p || p.grupoCalculado !== grupoActivo) return false;
+            
+            // Si ya hay alguna ejecución registrada para esta planificación en esta fecha, la quitamos
+            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
+            return ejecsEstePlanDia.length === 0;
         });
         
         elementosParaMostrar.sort((a,b) => {
