@@ -79,6 +79,11 @@ App.registerView('ejecucion', async () => {
                 t.classList.remove('active');
             }
         });
+        
+        // Auto-sincronizar cosecha al hacer click en el grupo COSECHA
+        if (grupo === 'COSECHA') {
+            window.sincronizarCosechaApi();
+        }
     };
     
     const renderGrupoTabs = () => {
@@ -143,7 +148,7 @@ App.registerView('ejecucion', async () => {
         let esSimulado = false;
 
         try {
-            const url = `https://cosecha-app.onrender.com/api/semanas/tallos-producto-maestro?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
+            const url = `https://cosecha-app-1.onrender.com/api/resumen?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
             const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`Status: ${response.status}`);
@@ -153,114 +158,55 @@ App.registerView('ejecucion', async () => {
             console.warn('Error fetching harvest API, falling back to mock data:', e);
             esSimulado = true;
             
-            // Simular datos de la API en el formato de /api/semanas/tallos-producto-maestro
+            // Simular datos de la API en el formato plano de /api/resumen
             data = {
-                filtro_semana: semanaActual.codigoAass,
-                total_semanas: 1,
-                semanas: [
-                    {
-                        semana: semanaActual.codigoAass,
-                        productos: [
-                            {
-                                producto_maestro: "GYPSOPHILA",
-                                total_tallos: 15000,
-                                total_mallas: 600,
-                                total_registros: 10,
-                                dias: [
-                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 2500, total_mallas: 100, total_registros: 2 }
-                                ]
-                            },
-                            {
-                                producto_maestro: "HYPERICUM",
-                                total_tallos: 12000,
-                                total_mallas: 480,
-                                total_registros: 8,
-                                dias: [
-                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 2000, total_mallas: 80, total_registros: 2 }
-                                ]
-                            },
-                            {
-                                producto_maestro: "VERONICA",
-                                total_tallos: 6000,
-                                total_mallas: 240,
-                                total_registros: 6,
-                                dias: [
-                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 1000, total_mallas: 40, total_registros: 1 }
-                                ]
-                            },
-                            {
-                                producto_maestro: "SOLIDAGO",
-                                total_tallos: 9000,
-                                total_mallas: 360,
-                                total_registros: 5,
-                                dias: [
-                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 1500, total_mallas: 60, total_registros: 1 }
-                                ]
-                            },
-                            {
-                                producto_maestro: "SUNFLOWER",
-                                total_tallos: 4500,
-                                total_mallas: 150,
-                                total_registros: 4,
-                                dias: [
-                                    { fecha: fechaSeleccionada, dia_semana: nombreDia, total_tallos: 750, total_mallas: 25, total_registros: 1 }
-                                ]
-                            }
-                        ]
-                    }
+                semana: semanaActual.codigoAass,
+                total_registros: 5,
+                datos: [
+                    { producto_maestro: "GYPSOPHILA", total_tallos: 2500, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                    { producto_maestro: "HYPERICUM", total_tallos: 19050, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                    { producto_maestro: "VERONICA", total_tallos: 22425, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                    { producto_maestro: "SOLIDAGO", total_tallos: 10775, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                    { producto_maestro: "SUNFLOWER", total_tallos: 750, fecha: fechaSeleccionada, dia_semana: nombreDia }
                 ]
             };
             
-            showNotification('API externa no disponible (503). Usando datos simulados locales.', 'warning');
+            showNotification('API externa no disponible. Usando datos simulados locales.', 'warning');
         }
 
-        // Buscar la semana activa en la respuesta de la API (generalmente es la primera porque filtramos en la query)
-        const semanaApi = data.semanas && data.semanas.length > 0 ? data.semanas[0] : null;
-
-        if (!semanaApi) {
-            showNotification(`No se encontraron registros de cosecha en la respuesta para la semana ${semanaActual.codigoAass}`, 'warning');
+        const registros = data.datos || [];
+        if (!registros.length) {
+            showNotification('No hay registros de cosecha disponibles para esta semana en la API', 'warning');
             return;
         }
 
-        const productosApi = semanaApi.productos || [];
-        if (!productosApi.length) {
-            showNotification('No hay productos de cosecha disponibles para esta semana en la API', 'warning');
-            return;
-        }
+        // Agrupar por producto_maestro para la fecha seleccionada
+        const totalesPorProducto = {};
+        registros.forEach(r => {
+            if (r.fecha === fechaSeleccionada) {
+                const prod = String(r.producto_maestro || '').toUpperCase().trim();
+                const tallos = parseFloat(r.total_tallos || r.cantidad || r.unidades || 0);
+                totalesPorProducto[prod] = (totalesPorProducto[prod] || 0) + tallos;
+            }
+        });
 
         let matchCount = 0;
         const rows = document.querySelectorAll('#grid-container-ejecucion tr[data-producto-codigo]');
         
-        productosApi.forEach(pApi => {
-            const apiCultivo = String(pApi.producto_maestro || '').toUpperCase().trim();
-            const diasCosecha = pApi.dias || [];
-
-            // Buscar el día seleccionado en los registros diarios del producto
-            const registroDia = diasCosecha.find(d => 
-                d.fecha === fechaSeleccionada || 
-                String(d.dia_semana).toLowerCase() === nombreDia.toLowerCase()
-            );
-
-            if (!registroDia) return;
-
-            const totalCosechado = parseFloat(registroDia.total_tallos || 0);
-            if (totalCosechado <= 0) return;
-
-            rows.forEach(row => {
-                const rowProdCodigo = String(row.dataset.productoCodigo || '').toUpperCase().trim();
+        rows.forEach(row => {
+            const rowProdCodigo = String(row.dataset.productoCodigo || '').toUpperCase().trim();
+            const planId = row.dataset.id;
+            
+            if (rowProdCodigo && totalesPorProducto[rowProdCodigo] !== undefined) {
+                const totalCosechado = totalesPorProducto[rowProdCodigo];
+                const unidadesInput = document.getElementById(`unidades-real-${planId}`);
                 
-                // Hacer match por código o similitud de nombres
-                if (rowProdCodigo && (rowProdCodigo === apiCultivo || apiCultivo.includes(rowProdCodigo) || rowProdCodigo.includes(apiCultivo))) {
-                    const planId = row.dataset.id;
-                    const unidadesInput = document.getElementById(`unidades-real-${planId}`);
-                    
-                    if (unidadesInput) {
-                        unidadesInput.value = totalCosechado;
-                        calcularRendimientoReal(planId);
-                        matchCount++;
-                    }
+                if (unidadesInput) {
+                    unidadesInput.value = totalCosechado;
+                    calcularRendimientoReal(planId);
+                    matchCount++;
                 }
-            });
+            }
         });
 
         if (matchCount > 0) {
@@ -751,7 +697,8 @@ App.registerView('ejecucion', async () => {
                         <td style="text-align:center;">
                             <input type="number" id="unidades-real-${p.id}" placeholder="${uniPendiente.toFixed(0)}" min="0" onfocus="this.select()"
                                    oninput="calcularRendimientoReal(${p.id})"
-                                   style="width:70px; padding:0.3rem; border-radius:6px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white; text-align:center;">
+                                   ${isCosecha ? 'readonly tabindex="-1"' : ''}
+                                   style="width:70px; padding:0.3rem; border-radius:6px; background:${isCosecha ? 'rgba(255,255,255,0.05)' : 'var(--surface-glass)'}; border:1px solid ${isCosecha ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)'}; color:${isCosecha ? '#94A3B8' : 'white'}; text-align:center; cursor:${isCosecha ? 'not-allowed' : 'auto'};">
                         </td>
                         <td style="text-align:center;">
                             <input type="number" id="horas-real-${p.id}" placeholder="${pendiente.toFixed(1)}" step="0.5" min="0" onfocus="this.select()"
@@ -1033,7 +980,12 @@ App.registerView('ejecucion', async () => {
         ? ejecuciones.filter(e => e.fecha >= inicioFechaSemana && e.fecha <= finFechaSemana)
         : [];
 
-    setTimeout(configurarNavegacionTecladoEjecucion, 100);
+    setTimeout(() => {
+        configurarNavegacionTecladoEjecucion();
+        if (grupoActivo === 'COSECHA') {
+            window.sincronizarCosechaApi();
+        }
+    }, 100);
 
     return `
         <div class="fade-in">
@@ -1069,12 +1021,7 @@ App.registerView('ejecucion', async () => {
                         <div style="font-size:0.9rem; color:var(--text-muted); text-align:right;">
                             ${totalHorasEjecutadas.toFixed(1)}h de ${totalHorasPlanificadas.toFixed(1)}h planificadas
                         </div>
-                        ${grupoActivo === 'COSECHA' ? `
-                        <button class="btn btn-secondary" onclick="sincronizarCosechaApi()" 
-                                style="background:linear-gradient(135deg, #3B82F6, #1D4ED8); border:none; font-weight:800; font-size:0.95rem; padding:0.8rem 1.5rem; border-radius:8px; box-shadow:0 4px 15px rgba(59, 130, 246, 0.4); letter-spacing:0.5px; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; cursor:pointer; color:white;">
-                            <i class="fa-solid fa-sync"></i> SINCRONIZAR COSECHA API
-                        </button>
-                        ` : ''}
+
                         <button class="btn btn-primary" onclick="guardarTodoEjecucion()" 
                                 style="background:linear-gradient(135deg, #10B981, #059669); border:none; font-weight:800; font-size:0.95rem; padding:0.8rem 1.5rem; border-radius:8px; box-shadow:0 4px 15px rgba(16, 185, 129, 0.4); letter-spacing:0.5px; text-transform:uppercase; display:inline-flex; align-items:center; gap:0.5rem; cursor:pointer;">
                             <i class="fa-solid fa-floppy-disk"></i> GUARDAR AVANCES DE EJECUCIÓN DEL DÍA
