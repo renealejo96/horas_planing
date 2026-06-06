@@ -289,7 +289,7 @@ App.registerView('usuarios', async () => {
                             </div>
                         </div>
 
-                        <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem; border-top:1px solid var(--surface-glass-border); padding-top:1rem; margin-top:1rem;">
+                        <div class="modal-footer">
                             <button type="button" class="btn btn-outline" onclick="closeModal()">Cancelar</button>
                             <button type="submit" class="btn btn-primary">Guardar Usuario</button>
                         </div>
