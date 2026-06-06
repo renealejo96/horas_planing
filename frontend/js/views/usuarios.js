@@ -236,7 +236,7 @@ App.registerView('usuarios', async () => {
                         <button class="modal-close" onclick="closeModal()">&times;</button>
                     </div>
                     
-                    <form id="form-usuario" onsubmit="guardarUsuario(e || event)">
+                    <form id="form-usuario" onsubmit="guardarUsuario(event)">
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
                             <div class="form-group">
                                 <label for="user-username">Nombre de Usuario <span style="color:#EF4444;">*</span></label>
