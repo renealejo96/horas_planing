@@ -148,7 +148,7 @@ App.registerView('ejecucion', async () => {
         let esSimulado = false;
 
         try {
-            const url = `https://cosecha-app-1.onrender.com/api/resumen?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
+            const url = `/api/ejecucion/cosechas-externas?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
             const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`Status: ${response.status}`);

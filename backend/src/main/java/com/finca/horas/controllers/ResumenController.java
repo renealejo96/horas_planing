@@ -463,4 +463,22 @@ public class ResumenController {
             workbook.write(response.getOutputStream());
         }
     }
+
+    /**
+     * GET /api/ejecucion/cosechas-externas
+     * Proxy to bypass browser CORS restrictions when fetching harvest data.
+     */
+    @GetMapping("/ejecucion/cosechas-externas")
+    public ResponseEntity<?> obtenerCosechasExternas(@RequestParam("semana") String semana) {
+        String url = "https://cosecha-app-1.onrender.com/api/resumen?semana=" + semana;
+        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+        try {
+            Map<?, ?> response = restTemplate.getForObject(url, Map.class);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Error al conectar con la API de cosecha: " + e.getMessage());
+            return ResponseEntity.status(502).body(error);
+        }
+    }
 }
