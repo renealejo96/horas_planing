@@ -148,12 +148,7 @@ App.registerView('ejecucion', async () => {
         let esSimulado = false;
 
         try {
-            const url = `/api/ejecucion/cosechas-externas?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Status: ${response.status}`);
-            }
-            data = await response.json();
+            data = await api.request(`/ejecucion/cosechas-externas?semana=${encodeURIComponent(semanaActual.codigoAass)}`);
         } catch (e) {
             console.warn('Error fetching harvest API via proxy, attempting direct fetch:', e);
             try {
@@ -385,12 +380,7 @@ App.registerView('ejecucion', async () => {
 
                 let data;
                 try {
-                    const url = `/api/ejecucion/cosechas-externas?semana=${encodeURIComponent(weekCode)}`;
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Proxy status: ${response.status}`);
-                    }
-                    data = await response.json();
+                    data = await api.request(`/ejecucion/cosechas-externas?semana=${encodeURIComponent(weekCode)}`);
                 } catch (proxyErr) {
                     console.warn('Error fetching harvest API via proxy for edit, trying direct URL:', proxyErr);
                     const directUrl = `https://cosecha-app-1.onrender.com/api/resumen?semana=${encodeURIComponent(weekCode)}`;
