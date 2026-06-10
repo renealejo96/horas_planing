@@ -145,7 +145,6 @@ App.registerView('ejecucion', async () => {
         showNotification('Conectando con la API de Cosecha...', 'info');
 
         let data;
-        let esSimulado = false;
 
         try {
             data = await api.request(`/ejecucion/cosechas-externas?semana=${encodeURIComponent(semanaActual.codigoAass)}`);
@@ -161,22 +160,8 @@ App.registerView('ejecucion', async () => {
                 console.log('Successfully fetched harvest data directly from Render API.');
             } catch (directErr) {
                 console.error('Direct fetch also failed:', directErr);
-                esSimulado = true;
-                
-                // Simular datos de la API en el formato plano de /api/resumen
-                data = {
-                    semana: semanaActual.codigoAass,
-                    total_registros: 5,
-                    datos: [
-                        { producto_maestro: "GYPSOPHILA", total_tallos: 2500, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                        { producto_maestro: "HYPERICUM", total_tallos: 19050, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                        { producto_maestro: "VERONICA", total_tallos: 22425, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                        { producto_maestro: "SOLIDAGO", total_tallos: 10775, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                        { producto_maestro: "SUNFLOWER", total_tallos: 750, fecha: fechaSeleccionada, dia_semana: nombreDia }
-                    ]
-                };
-                
-                showNotification('API de cosecha no disponible. Usando datos simulados locales.', 'warning');
+                showNotification('Error al conectar con la API de Cosecha. Sincronización cancelada para evitar datos incorrectos.', 'error');
+                return;
             }
         }
 
@@ -216,7 +201,7 @@ App.registerView('ejecucion', async () => {
         });
 
         if (matchCount > 0) {
-            showNotification(`✓ Sincronizados ${matchCount} registros de cosecha (${esSimulado ? 'Simulados' : 'API Real'})`, 'success');
+            showNotification(`✓ Sincronizados ${matchCount} registros de cosecha desde la API`, 'success');
         } else {
             showNotification('No se encontraron coincidencias de cultivos entre la API y la planificación de hoy', 'info');
         }
