@@ -110,7 +110,8 @@ public class ResumenController {
             "HYPERICUM", 25, 
             "VERONICA", 25, 
             "SOLIDAGO", 25, 
-            "SUNFLOWER", 30
+            "SUNFLOWER", 30,
+            "Eucalitpos", 25
         );
         
         for (EjecucionActividad c : cosechas) {
@@ -201,7 +202,8 @@ public class ResumenController {
             "HYPERICUM", 25, 
             "VERONICA", 25, 
             "SOLIDAGO", 25, 
-            "SUNFLOWER", 30
+            "SUNFLOWER", 30,
+            "Eucalitpos", 25
         );
         
         for (Semana sem : semanasAConsultar) {
@@ -389,7 +391,8 @@ public class ResumenController {
                 "HYPERICUM", 25, 
                 "VERONICA", 25, 
                 "SOLIDAGO", 25, 
-                "SUNFLOWER", 30
+                "SUNFLOWER", 30,
+                "Eucalitpos", 25
             );
             
             int rowIdx = 1;

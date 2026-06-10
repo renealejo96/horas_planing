@@ -4,8 +4,12 @@ import com.finca.horas.entities.PlanificacionActividad;
 import com.finca.horas.entities.Semana;
 import com.finca.horas.entities.Semana.EstadoSemana;
 import com.finca.horas.entities.Rendimiento;
+import com.finca.horas.entities.PlanificacionDiaria;
+import com.finca.horas.entities.EjecucionActividad;
 import com.finca.horas.repositories.PlanificacionActividadRepository;
 import com.finca.horas.repositories.SemanaRepository;
+import com.finca.horas.repositories.PlanificacionDiariaRepository;
+import com.finca.horas.repositories.EjecucionActividadRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +30,12 @@ public class PlanificacionService {
 
     @Autowired
     private SemanaRepository semanaRepo;
+
+    @Autowired
+    private PlanificacionDiariaRepository planificacionDiariaRepo;
+
+    @Autowired
+    private EjecucionActividadRepository ejecucionActividadRepo;
 
     // ==================== SEMANAS ====================
 
@@ -186,12 +196,26 @@ public class PlanificacionService {
             });
     }
     
+    @Transactional
     public boolean eliminarPlanificacion(Long id) {
-        if (planificacionRepo.existsById(id)) {
-            planificacionRepo.deleteById(id);
-            return true;
-        }
-        return false;
+        return planificacionRepo.findById(id)
+            .map(plan -> {
+                // 1. Eliminar asignaciones diarias asociadas
+                List<PlanificacionDiaria> diarias = planificacionDiariaRepo.findByPlanificacion(plan);
+                planificacionDiariaRepo.deleteAll(diarias);
+                
+                // 2. Desvincular ejecuciones (poner planificacion_id = null)
+                List<EjecucionActividad> ejecuciones = ejecucionActividadRepo.findByPlanificacion(plan);
+                for (EjecucionActividad e : ejecuciones) {
+                    e.setPlanificacion(null);
+                    ejecucionActividadRepo.save(e);
+                }
+                
+                // 3. Eliminar la planificación semanal
+                planificacionRepo.delete(plan);
+                return true;
+            })
+            .orElse(false);
     }
     
     private void calcularHoras(PlanificacionActividad act) {

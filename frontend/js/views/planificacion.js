@@ -455,13 +455,19 @@ App.registerView('planificacion', async () => {
                     const dsc = (p.actividad?.nombre || '-');
                     const horas = p.horasAjustadas || p.horasCalculadas || 0;
                     
-                    let tallosStr = '';
+                    let subInfoStr = '';
                     if (isCosechaGroup) {
                         const pdcto = p.producto || p.actividad?.producto;
                         const tallosMalla = pdcto ? (TALLOS_POR_MALLA[pdcto.codigo] || 25) : 25;
                         const rendUsado = p.rendimientoUsado || 1;
                         const tallos = Math.round(horas * rendUsado * tallosMalla);
-                        tallosStr = `<div style="font-size:0.65rem; color:#F59E0B; margin-top:1px;">${tallos.toLocaleString()} tallos</div>`;
+                        subInfoStr = `
+                            <div style="font-size:0.65rem; color:#F59E0B; margin-top:1px;">${tallos.toLocaleString()} tallos</div>
+                            <div style="font-size:0.62rem; color:var(--text-muted); opacity:0.8;">Rendimiento: ${rendUsado} mal/h</div>
+                        `;
+                    } else {
+                        const rendUsado = p.rendimientoUsado || 0;
+                        subInfoStr = `<div style="font-size:0.62rem; color:var(--text-muted); opacity:0.8;">Rendimiento: ${rendUsado}</div>`;
                     }
 
                     if (isEditing) {
@@ -469,7 +475,7 @@ App.registerView('planificacion', async () => {
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.03); background:rgba(59,130,246,0.05);">
                                 <td style="padding:0.5rem; font-size:0.75rem; padding-left: 2rem;">
                                     <strong>${dsc}</strong>
-                                    ${tallosStr}
+                                    ${subInfoStr}
                                 </td>
                                 <td style="padding:0.5rem;">
                                     <select id="edit-bloque-${p.id}" style="width:100%; padding:0.3rem; background:#1E293B; color:white; border-radius:4px; border:1px solid #3B82F6; font-size:0.7rem;">
@@ -492,12 +498,15 @@ App.registerView('planificacion', async () => {
                                         </button>
                                     </div>
                                 </td>
-                            </tr>
+                                    </tr>
                         `;
                     } else {
                         html += `
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
-                                <td style="padding:0.5rem; font-size:0.75rem; padding-left: 2rem;">${dsc}${tallosStr}</td>
+                                <td style="padding:0.5rem; font-size:0.75rem; padding-left: 2rem;">
+                                    <strong>${dsc}</strong>
+                                    ${subInfoStr}
+                                </td>
                                 <td style="padding:0.5rem; text-align:center; font-size:0.75rem; color:var(--text-muted);">${p.bloque || '-'}</td>
                                 <td style="padding:0.5rem; text-align:center; font-size:1rem; font-weight:700; color:#CBD5E1;">${p.unidadesPlanificadas || 0}</td>
                                 <td style="padding:0.5rem; text-align:center;"><span style="color:#93C5FD; font-weight:700; font-size:0.8rem;">${horas.toFixed(1)}h</span></td>
