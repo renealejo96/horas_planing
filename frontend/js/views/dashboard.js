@@ -303,7 +303,7 @@ App.registerView('dashboard', async () => {
 
             <!-- VELOCÍMETRO DE HORAS - Indicador Principal -->
             <div class="card" style="margin-bottom:1.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); border: 1px solid rgba(255,255,255,0.15);">
-                <div style="display:grid; grid-template-columns: 1fr 300px 1fr; gap:2rem; align-items:center;">
+                <div class="dashboard-gauge-grid">
                     
                     <!-- Info Izquierda -->
                     <div style="text-align:center; align-self:start;">
@@ -427,7 +427,7 @@ App.registerView('dashboard', async () => {
 
             <div class="card" style="margin-top:1.5rem; margin-bottom:1.5rem;">
                 <h3><i class="fa-solid fa-calendar-week" style="color:var(--primary); margin-right:0.5rem;"></i> Semanas de Trabajo</h3>
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap:1rem; margin-top:1rem;">
+                <div class="dashboard-weeks-grid">
                     <div style="padding:1.25rem; background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); border-radius:12px;">
                         <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;">SEMANA SELECCIONADA</div>
                         ${semanaSeleccionada ? `

@@ -2069,5 +2069,27 @@ textarea::placeholder {
     accent-color: var(--primary);
 }
 
+/* Dashboard responsive optimizations */
+.dashboard-gauge-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px 1fr;
+    gap: 2rem;
+    align-items: center;
+}
+
+.dashboard-weeks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 900px) {
+    .dashboard-gauge-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+}
+
 
 
