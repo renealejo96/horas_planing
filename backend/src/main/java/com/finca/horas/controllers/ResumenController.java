@@ -473,11 +473,28 @@ public class ResumenController {
         String url = "https://cosecha-app-1.onrender.com/api/resumen?semana=" + semana;
         org.springframework.web.client.RestTemplate restTemplate = crearRestTemplateSeguro();
         try {
-            Map<?, ?> response = restTemplate.getForObject(url, Map.class);
-            return ResponseEntity.ok(response);
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            headers.set("Accept", "application/json");
+            org.springframework.http.HttpEntity<Void> entity = new org.springframework.http.HttpEntity<>(headers);
+            
+            org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
+                url,
+                org.springframework.http.HttpMethod.GET,
+                entity,
+                Map.class
+            );
+            return ResponseEntity.ok(response.getBody());
         } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
+            Map<String, Object> error = new HashMap<>();
             error.put("error", "Error al conectar con la API de cosecha: " + e.getMessage());
+            error.put("exception_type", e.getClass().getName());
+            
+            if (e instanceof org.springframework.web.client.HttpStatusCodeException) {
+                org.springframework.web.client.HttpStatusCodeException httpEx = (org.springframework.web.client.HttpStatusCodeException) e;
+                error.put("status_code", httpEx.getStatusCode().value());
+                error.put("response_body", httpEx.getResponseBodyAsString());
+            }
             return ResponseEntity.status(502).body(error);
         }
     }
