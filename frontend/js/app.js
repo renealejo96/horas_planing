@@ -8,6 +8,28 @@ const App = {
     },
     
     navigate: function(viewName) {
+        // Bloqueo de seguridad basado en roles
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            if (viewName === 'usuarios' && user.rol !== 'ADMIN') {
+                showNotification('Acceso denegado: Se requiere rol ADMIN', 'error');
+                if (this.currentView && this.currentView !== 'usuarios') {
+                    return;
+                }
+                this.navigate('dashboard');
+                return;
+            }
+            if (viewName === 'rendimientos' && user.rol === 'SUPERVISOR' && !user.modificarRendimientos) {
+                showNotification('Acceso denegado: No tienes permisos para modificar rendimientos', 'error');
+                if (this.currentView && this.currentView !== 'rendimientos') {
+                    return;
+                }
+                this.navigate('dashboard');
+                return;
+            }
+        }
+
         const container = document.getElementById('view-container');
         const titleSpan = document.getElementById('page-title');
         

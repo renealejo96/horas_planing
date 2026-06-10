@@ -4,6 +4,7 @@ import com.finca.horas.entities.EjecucionActividad;
 import com.finca.horas.entities.Actividad;
 import com.finca.horas.repositories.ActividadRepository;
 import com.finca.horas.repositories.EjecucionActividadRepository;
+import com.finca.horas.repositories.PlanificacionActividadRepository;
 import com.finca.horas.services.EjecucionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ public class EjecucionController {
     @Autowired
     private EjecucionActividadRepository ejecucionActividadRepository;
 
+    @Autowired
+    private PlanificacionActividadRepository planificacionActividadRepository;
+
     @GetMapping
     public List<EjecucionActividad> obtenerEjecuciones() {
         return ejecucionService.obtenerEjecuciones();
@@ -40,9 +44,18 @@ public class EjecucionController {
 
     @PostMapping
     public ResponseEntity<?> registrarEjecucion(HttpServletRequest request, @RequestBody EjecucionActividad ejecucion) {
+        String rol = (String) request.getAttribute("rol");
+        if ("ADMIN".equals(rol)) {
+            return ResponseEntity.ok(ejecucionService.registrarEjecucion(ejecucion));
+        }
+
         Long actId = null;
         if (ejecucion.getActividad() != null) {
             actId = ejecucion.getActividad().getId();
+        } else if (ejecucion.getPlanificacion() != null && ejecucion.getPlanificacion().getId() != null) {
+            actId = planificacionActividadRepository.findById(ejecucion.getPlanificacion().getId())
+                .map(p -> p.getActividad() != null ? p.getActividad().getId() : null)
+                .orElse(null);
         }
         
         if (actId == null || !esActividadPermitida(actId, request)) {
