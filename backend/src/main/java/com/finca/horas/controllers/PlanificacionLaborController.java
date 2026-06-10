@@ -30,7 +30,8 @@ public class PlanificacionLaborController {
         "HYPERICUM", 25,
         "VERONICA", 25,
         "SOLIDAGO", 25,
-        "SUNFLOWER", 30
+        "SUNFLOWER", 30,
+        "Eucalitpos", 25
     );
 
     /**

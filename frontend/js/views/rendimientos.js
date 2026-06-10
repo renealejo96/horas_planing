@@ -486,8 +486,13 @@ App.registerView('rendimientos', async () => {
                                     placeholder="Selecciona o escribe la labor"
                                     oninput="(function(v){
                                         const areaVal = document.getElementById('rend_area').value;
+                                        const prodSelect = document.querySelector('select[name=&quot;rend_producto&quot;]');
+                                        const prodId = prodSelect ? (parseInt(prodSelect.value) || null) : null;
                                         const acto = window._actividadesList||[];
-                                        const found = acto.find(a=>a.nombre.toLowerCase()===v.toLowerCase() && (!areaVal || a.area?.id == areaVal));
+                                        const found = acto.find(a=>a.nombre.toLowerCase()===v.toLowerCase() && 
+                                            (!areaVal || a.area?.id == areaVal) && 
+                                            ((!a.producto && !prodId) || (a.producto && a.producto.id === prodId))
+                                        );
                                         document.getElementById('rend_labor_id_hidden').value = found ? found.id : '';
                                      })(this.value)">
                                 <datalist id="datalist-labores">

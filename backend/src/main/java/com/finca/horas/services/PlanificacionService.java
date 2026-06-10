@@ -3,10 +3,12 @@ package com.finca.horas.services;
 import com.finca.horas.entities.PlanificacionActividad;
 import com.finca.horas.entities.Semana;
 import com.finca.horas.entities.Semana.EstadoSemana;
+import com.finca.horas.entities.Rendimiento;
 import com.finca.horas.repositories.PlanificacionActividadRepository;
 import com.finca.horas.repositories.SemanaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -203,6 +205,33 @@ public class PlanificacionService {
 
             if (act.getHorasAjustadas() == null) {
                 act.setHorasAjustadas(horas);
+            }
+        }
+    }
+
+    @Transactional
+    public void propagarRendimiento(Rendimiento rend) {
+        if (rend == null || rend.getActividad() == null || rend.getRendimiento() == null) {
+            return;
+        }
+        
+        List<PlanificacionActividad> planificaciones = planificacionRepo.findByActividad(rend.getActividad());
+        for (PlanificacionActividad plan : planificaciones) {
+            if (plan.getSemana() != null && plan.getSemana().getEstado() != EstadoSemana.CERRADA) {
+                if (plan.getUnidadesPlanificadas() != null && rend.getRendimiento() > 0) {
+                    double oldHorasCalculadas = plan.getHorasCalculadas() != null ? plan.getHorasCalculadas() : 0.0;
+                    double newRendimiento = rend.getRendimiento();
+                    double newHoras = plan.getUnidadesPlanificadas() / newRendimiento;
+                    
+                    plan.setRendimientoUsado(newRendimiento);
+                    plan.setHorasCalculadas(newHoras);
+                    
+                    if (plan.getHorasAjustadas() == null || Math.abs(plan.getHorasAjustadas() - oldHorasCalculadas) < 0.001) {
+                        plan.setHorasAjustadas(newHoras);
+                    }
+                    
+                    planificacionRepo.save(plan);
+                }
             }
         }
     }

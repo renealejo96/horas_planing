@@ -1,7 +1,7 @@
 App.registerView('planificacion', async () => {
     // ========== CONSTANTES ==========
     const TALLOS_POR_MALLA = {
-        'GYPSOPHILA': 25, 'HYPERICUM': 25, 'VERONICA': 25, 'SOLIDAGO': 25, 'SUNFLOWER': 30
+        'GYPSOPHILA': 25, 'HYPERICUM': 25, 'VERONICA': 25, 'SOLIDAGO': 25, 'SUNFLOWER': 30, 'Eucalitpos': 25
     };
     
     const BLOQUES = [

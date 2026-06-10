@@ -26,6 +26,9 @@ public class ImportacionRendimientoService {
     @Autowired
     private RendimientoRepository rendimientoRepository;
 
+    @Autowired
+    private PlanificacionService planificacionService;
+
     // Densidades por cultivo (plantas/cama)
     private static final Map<String, Double> DENSIDADES = Map.of(
         "GYPSOPHILA", 600.0,
@@ -147,6 +150,7 @@ public class ImportacionRendimientoService {
                 }
                 
                 rendimientoRepository.save(rendimiento);
+                planificacionService.propagarRendimiento(rendimiento);
 
                 // Registro de detalle
                 Map<String, Object> detalle = new HashMap<>();
@@ -314,6 +318,7 @@ public class ImportacionRendimientoService {
                 }
                 
                 rendimientoRepository.save(rendimiento);
+                planificacionService.propagarRendimiento(rendimiento);
 
                 // Registro de detalle
                 Map<String, Object> detalle = new HashMap<>();

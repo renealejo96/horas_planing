@@ -3,6 +3,7 @@ package com.finca.horas.controllers;
 import com.finca.horas.entities.*;
 import com.finca.horas.repositories.*;
 import com.finca.horas.services.ImportacionRendimientoService;
+import com.finca.horas.services.PlanificacionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,9 @@ public class AdminController {
     
     @Autowired
     private ImportacionRendimientoService importacionRendimientoService;
+    
+    @Autowired
+    private PlanificacionService planificacionService;
     
     @Value("${app.csv.path:}")
     private String csvBasePath;
@@ -363,7 +367,9 @@ public class AdminController {
             }
         }
         
-        return ResponseEntity.ok(rendimientoRepository.save(rendimiento));
+        Rendimiento saved = rendimientoRepository.save(rendimiento);
+        planificacionService.propagarRendimiento(saved);
+        return ResponseEntity.ok(saved);
     }
     
     @PutMapping("/rendimientos/{id}")
@@ -432,7 +438,9 @@ public class AdminController {
                     }
                 }
                 
-                return ResponseEntity.ok(rendimientoRepository.save(rendimiento));
+                Rendimiento saved = rendimientoRepository.save(rendimiento);
+                planificacionService.propagarRendimiento(saved);
+                return ResponseEntity.ok(saved);
             })
             .orElse(ResponseEntity.notFound().build());
     }
