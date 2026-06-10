@@ -82,6 +82,14 @@
                     <div class="week-selector">
                         <span class="badge" id="global-semana-badge"><i class="fa-solid fa-spinner fa-spin" style="margin-right:0.3rem;"></i> Cargando...</span>
                     </div>
+                    <div class="user-status-bar" id="header-user-status" style="display: none; align-items: center; gap: 0.5rem;">
+                        <span class="badge" id="header-username" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.8rem; padding: 0.35rem 0.75rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.35rem;">
+                            <i class="fa-solid fa-user"></i> <span id="header-user-text">User</span>
+                        </span>
+                        <button class="btn btn-outline" onclick="App.logout()" title="Cerrar Sesión" style="border-color: rgba(239, 68, 68, 0.4); color: #F87171; padding: 0.35rem 0.6rem; display: inline-flex; align-items: center; justify-content: center;">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
                 </div>
             </header>
 

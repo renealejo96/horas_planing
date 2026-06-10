@@ -142,6 +142,14 @@ const App = {
                 </div>
             `;
         }
+
+        // Actualizar datos de usuario en la cabecera (visible en todas las pantallas, especialmente móvil)
+        const headerUserStatus = document.getElementById('header-user-status');
+        const headerUserText = document.getElementById('header-user-text');
+        if (headerUserStatus && headerUserText) {
+            headerUserText.textContent = user.username;
+            headerUserStatus.style.display = 'flex';
+        }
         
         return true;
     },
