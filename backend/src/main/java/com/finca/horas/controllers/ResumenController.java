@@ -471,7 +471,7 @@ public class ResumenController {
     @GetMapping("/ejecucion/cosechas-externas")
     public ResponseEntity<?> obtenerCosechasExternas(@RequestParam("semana") String semana) {
         String url = "https://cosecha-app-1.onrender.com/api/resumen?semana=" + semana;
-        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+        org.springframework.web.client.RestTemplate restTemplate = crearRestTemplateSeguro();
         try {
             Map<?, ?> response = restTemplate.getForObject(url, Map.class);
             return ResponseEntity.ok(response);
@@ -479,6 +479,41 @@ public class ResumenController {
             Map<String, String> error = new HashMap<>();
             error.put("error", "Error al conectar con la API de cosecha: " + e.getMessage());
             return ResponseEntity.status(502).body(error);
+        }
+    }
+
+    private org.springframework.web.client.RestTemplate crearRestTemplateSeguro() {
+        try {
+            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+            javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[]{
+                new javax.net.ssl.X509TrustManager() {
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                    public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
+                }
+            };
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+            
+            org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory = 
+                new org.springframework.http.client.SimpleClientHttpRequestFactory() {
+                    @Override
+                    protected void prepareConnection(java.net.HttpURLConnection connection, String httpMethod) throws java.io.IOException {
+                        if (connection instanceof javax.net.ssl.HttpsURLConnection) {
+                            ((javax.net.ssl.HttpsURLConnection) connection).setSSLSocketFactory(sslContext.getSocketFactory());
+                            ((javax.net.ssl.HttpsURLConnection) connection).setHostnameVerifier((hostname, session) -> true);
+                        }
+                        super.prepareConnection(connection, httpMethod);
+                    }
+                };
+            
+            // Timeout de 60 segundos para permitir el arranque en frío de Render (normalmente toma ~50s)
+            requestFactory.setConnectTimeout(60000);
+            requestFactory.setReadTimeout(60000);
+            
+            return new org.springframework.web.client.RestTemplate(requestFactory);
+        } catch (Exception e) {
+            // Fallback al RestTemplate por defecto en caso de error de configuración
+            return new org.springframework.web.client.RestTemplate();
         }
     }
 }

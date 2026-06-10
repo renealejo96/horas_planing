@@ -155,23 +155,34 @@ App.registerView('ejecucion', async () => {
             }
             data = await response.json();
         } catch (e) {
-            console.warn('Error fetching harvest API, falling back to mock data:', e);
-            esSimulado = true;
-            
-            // Simular datos de la API en el formato plano de /api/resumen
-            data = {
-                semana: semanaActual.codigoAass,
-                total_registros: 5,
-                datos: [
-                    { producto_maestro: "GYPSOPHILA", total_tallos: 2500, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                    { producto_maestro: "HYPERICUM", total_tallos: 19050, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                    { producto_maestro: "VERONICA", total_tallos: 22425, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                    { producto_maestro: "SOLIDAGO", total_tallos: 10775, fecha: fechaSeleccionada, dia_semana: nombreDia },
-                    { producto_maestro: "SUNFLOWER", total_tallos: 750, fecha: fechaSeleccionada, dia_semana: nombreDia }
-                ]
-            };
-            
-            showNotification('API externa no disponible. Usando datos simulados locales.', 'warning');
+            console.warn('Error fetching harvest API via proxy, attempting direct fetch:', e);
+            try {
+                const directUrl = `https://cosecha-app-1.onrender.com/api/resumen?semana=${encodeURIComponent(semanaActual.codigoAass)}`;
+                const responseDirect = await fetch(directUrl);
+                if (!responseDirect.ok) {
+                    throw new Error(`Direct status: ${responseDirect.status}`);
+                }
+                data = await responseDirect.json();
+                console.log('Successfully fetched harvest data directly from Render API.');
+            } catch (directErr) {
+                console.error('Direct fetch also failed:', directErr);
+                esSimulado = true;
+                
+                // Simular datos de la API en el formato plano de /api/resumen
+                data = {
+                    semana: semanaActual.codigoAass,
+                    total_registros: 5,
+                    datos: [
+                        { producto_maestro: "GYPSOPHILA", total_tallos: 2500, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                        { producto_maestro: "HYPERICUM", total_tallos: 19050, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                        { producto_maestro: "VERONICA", total_tallos: 22425, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                        { producto_maestro: "SOLIDAGO", total_tallos: 10775, fecha: fechaSeleccionada, dia_semana: nombreDia },
+                        { producto_maestro: "SUNFLOWER", total_tallos: 750, fecha: fechaSeleccionada, dia_semana: nombreDia }
+                    ]
+                };
+                
+                showNotification('API de cosecha no disponible. Usando datos simulados locales.', 'warning');
+            }
         }
 
         const registros = data.datos || [];
@@ -372,12 +383,23 @@ App.registerView('ejecucion', async () => {
                     throw new Error('No hay producto asociado');
                 }
 
-                const url = `/api/ejecucion/cosechas-externas?semana=${encodeURIComponent(weekCode)}`;
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`Status: ${response.status}`);
+                let data;
+                try {
+                    const url = `/api/ejecucion/cosechas-externas?semana=${encodeURIComponent(weekCode)}`;
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Proxy status: ${response.status}`);
+                    }
+                    data = await response.json();
+                } catch (proxyErr) {
+                    console.warn('Error fetching harvest API via proxy for edit, trying direct URL:', proxyErr);
+                    const directUrl = `https://cosecha-app-1.onrender.com/api/resumen?semana=${encodeURIComponent(weekCode)}`;
+                    const responseDirect = await fetch(directUrl);
+                    if (!responseDirect.ok) {
+                        throw new Error(`Direct status: ${responseDirect.status}`);
+                    }
+                    data = await responseDirect.json();
                 }
-                const data = await response.json();
                 const registros = data.datos || [];
 
                 // Sumar tallos para la fecha del registro y el producto exacto
