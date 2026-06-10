@@ -45,10 +45,13 @@ const api = {
     getDashboard: () => api.request('/admin/dashboard'),
     getAreas: () => api.request('/admin/areas'),
     createArea: (data) => api.request('/admin/areas', 'POST', data),
+    updateArea: (id, data) => api.request(`/admin/areas/${id}`, 'PUT', data),
     getProductos: () => api.request('/admin/productos'),
     createProducto: (data) => api.request('/admin/productos', 'POST', data),
+    updateProducto: (id, data) => api.request(`/admin/productos/${id}`, 'PUT', data),
     getUnidades: () => api.request('/admin/unidades'),
     createUnidad: (data) => api.request('/admin/unidades', 'POST', data),
+    updateUnidad: (id, data) => api.request(`/admin/unidades/${id}`, 'PUT', data),
     
     // ========== Actividades ==========
     getActividades: () => api.request('/admin/actividades'),

@@ -309,6 +309,32 @@ App.registerView('rendimientos', async () => {
         } catch { showNotification('Error al crear área', 'error'); }
     };
 
+    window.abrirEditarArea = (id) => {
+        const a = areas.find(x => x.id === id);
+        if (!a) return;
+        const form = document.getElementById('form-edit-area');
+        form.area_id.value = a.id;
+        form.area_codigo.value = a.codigo || '';
+        form.area_nombre.value = a.nombre || '';
+        form.area_descripcion.value = a.descripcion || '';
+        document.getElementById('modal-edit-area').style.display = 'flex';
+    };
+
+    window.actualizarArea = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        try {
+            await api.updateArea(parseInt(form.area_id.value), {
+                codigo: form.area_codigo.value,
+                nombre: form.area_nombre.value,
+                descripcion: form.area_descripcion.value
+            });
+            showNotification('Área actualizada ✓', 'success');
+            document.getElementById('modal-edit-area').style.display = 'none';
+            App.navigate('rendimientos');
+        } catch { showNotification('Error al actualizar área', 'error'); }
+    };
+
     // ─── Funciones CRUD Producto ───────────────────────────────────────────────
     window.crearProducto = async (e) => {
         e.preventDefault();
@@ -319,6 +345,82 @@ App.registerView('rendimientos', async () => {
             document.getElementById('modal-producto').style.display = 'none';
             App.navigate('rendimientos');
         } catch { showNotification('Error al crear producto', 'error'); }
+    };
+
+    window.abrirEditarProducto = (id) => {
+        const p = productos.find(x => x.id === id);
+        if (!p) return;
+        const form = document.getElementById('form-edit-producto');
+        form.prod_id.value = p.id;
+        form.prod_codigo.value = p.codigo || '';
+        form.prod_nombre.value = p.nombre || '';
+        form.prod_densidad.value = p.densidad || '';
+        form.prod_descripcion.value = p.descripcion || '';
+        document.getElementById('modal-edit-producto').style.display = 'flex';
+    };
+
+    window.actualizarProducto = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        try {
+            await api.updateProducto(parseInt(form.prod_id.value), {
+                codigo: form.prod_codigo.value,
+                nombre: form.prod_nombre.value,
+                densidad: parseFloat(form.prod_densidad.value),
+                descripcion: form.prod_descripcion.value
+            });
+            showNotification('Producto actualizado ✓', 'success');
+            document.getElementById('modal-edit-producto').style.display = 'none';
+            App.navigate('rendimientos');
+        } catch { showNotification('Error al actualizar producto', 'error'); }
+    };
+
+    // ─── Funciones CRUD Unidad de Medida ───────────────────────────────────────
+    window.crearUnidad = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        try {
+            await api.createUnidad({ 
+                codigo: form.codigo.value, 
+                nombre: form.nombre.value, 
+                descripcion: form.descripcion.value,
+                factorAHoras: parseFloat(form.factorAHoras.value || 1),
+                tipoConversion: form.tipoConversion.value || 'MULTIPLICAR'
+            });
+            showNotification('Unidad de medida creada exitosamente', 'success');
+            document.getElementById('modal-unidad').style.display = 'none';
+            App.navigate('rendimientos');
+        } catch { showNotification('Error al crear unidad', 'error'); }
+    };
+
+    window.abrirEditarUnidad = (id) => {
+        const u = unidades.find(x => x.id === id);
+        if (!u) return;
+        const form = document.getElementById('form-edit-unidad');
+        form.uni_id.value = u.id;
+        form.uni_codigo.value = u.codigo || '';
+        form.uni_nombre.value = u.nombre || '';
+        form.uni_descripcion.value = u.descripcion || '';
+        form.uni_factor.value = u.factorAHoras || 1;
+        form.uni_tipo.value = u.tipoConversion || 'MULTIPLICAR';
+        document.getElementById('modal-edit-unidad').style.display = 'flex';
+    };
+
+    window.actualizarUnidad = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        try {
+            await api.updateUnidad(parseInt(form.uni_id.value), {
+                codigo: form.uni_codigo.value,
+                nombre: form.uni_nombre.value,
+                descripcion: form.uni_descripcion.value,
+                factorAHoras: parseFloat(form.uni_factor.value || 1),
+                tipoConversion: form.uni_tipo.value
+            });
+            showNotification('Unidad de medida actualizada ✓', 'success');
+            document.getElementById('modal-edit-unidad').style.display = 'none';
+            App.navigate('rendimientos');
+        } catch { showNotification('Error al actualizar unidad', 'error'); }
     };
 
     // ─── Funciones CRUD Actividad ──────────────────────────────────────────────
@@ -616,11 +718,94 @@ App.registerView('rendimientos', async () => {
             </div>
         </div>
 
+        <!-- ===== MODAL EDITAR ÁREA ===== -->
+        <div id="modal-edit-area" class="modal-overlay" style="display:none;">
+            <div class="modal-content">
+                <h3><i class="fa-solid fa-pen"></i> Editar Área</h3>
+                <form id="form-edit-area" onsubmit="actualizarArea(event)">
+                    <input type="hidden" name="area_id">
+                    <div class="form-group"><label>Código</label><input type="text" name="area_codigo" required></div>
+                    <div class="form-group"><label>Nombre</label><input type="text" name="area_nombre" required></div>
+                    <div class="form-group"><label>Descripción</label><input type="text" name="area_descripcion"></div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-outline" onclick="document.getElementById('modal-edit-area').style.display='none'">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Actualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ===== MODAL EDITAR PRODUCTO ===== -->
+        <div id="modal-edit-producto" class="modal-overlay" style="display:none;">
+            <div class="modal-content">
+                <h3><i class="fa-solid fa-pen"></i> Editar Producto</h3>
+                <form id="form-edit-producto" onsubmit="actualizarProducto(event)">
+                    <input type="hidden" name="prod_id">
+                    <div class="form-group"><label>Código</label><input type="text" name="prod_codigo" required></div>
+                    <div class="form-group"><label>Nombre</label><input type="text" name="prod_nombre" required></div>
+                    <div class="form-group"><label>Densidad (plantas/cama)</label><input type="number" name="prod_densidad" step="0.1" required></div>
+                    <div class="form-group"><label>Descripción</label><input type="text" name="prod_descripcion"></div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-outline" onclick="document.getElementById('modal-edit-producto').style.display='none'">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Actualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ===== MODAL NUEVA UNIDAD ===== -->
+        <div id="modal-unidad" class="modal-overlay" style="display:none;">
+            <div class="modal-content">
+                <h3><i class="fa-solid fa-ruler"></i> Nueva Unidad de Medida</h3>
+                <form onsubmit="crearUnidad(event)">
+                    <div class="form-group"><label>Código</label><input type="text" name="codigo" required placeholder="Ej: CAMAS_HORA"></div>
+                    <div class="form-group"><label>Nombre</label><input type="text" name="nombre" required placeholder="Ej: Camas por hora"></div>
+                    <div class="form-group"><label>Descripción</label><input type="text" name="descripcion"></div>
+                    <div class="form-group"><label>Factor a Horas</label><input type="number" name="factorAHoras" step="0.0001" required value="1" placeholder="Ej: 1"></div>
+                    <div class="form-group"><label>Tipo Conversión</label>
+                        <select name="tipoConversion" required>
+                            <option value="MULTIPLICAR">Multiplicar</option>
+                            <option value="DIVIDIR">Dividir</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-outline" onclick="document.getElementById('modal-unidad').style.display='none'">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ===== MODAL EDITAR UNIDAD ===== -->
+        <div id="modal-edit-unidad" class="modal-overlay" style="display:none;">
+            <div class="modal-content">
+                <h3><i class="fa-solid fa-pen"></i> Editar Unidad de Medida</h3>
+                <form id="form-edit-unidad" onsubmit="actualizarUnidad(event)">
+                    <input type="hidden" name="uni_id">
+                    <div class="form-group"><label>Código</label><input type="text" name="uni_codigo" required></div>
+                    <div class="form-group"><label>Nombre</label><input type="text" name="uni_nombre" required></div>
+                    <div class="form-group"><label>Descripción</label><input type="text" name="uni_descripcion"></div>
+                    <div class="form-group"><label>Factor a Horas</label><input type="number" name="uni_factor" step="0.0001" required></div>
+                    <div class="form-group"><label>Tipo Conversión</label>
+                        <select name="uni_tipo" required>
+                            <option value="MULTIPLICAR">Multiplicar</option>
+                            <option value="DIVIDIR">Dividir</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-outline" onclick="document.getElementById('modal-edit-unidad').style.display='none'">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Actualizar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- ===== BARRA SUPERIOR ===== -->
         <div class="top-actions" style="margin-bottom:1rem; justify-content:flex-end; gap:0.5rem; flex-wrap:wrap;">
             <button class="btn btn-outline" onclick="openModal('modal-area')"><i class="fa-solid fa-layer-group"></i> + Área</button>
             <button class="btn btn-outline" onclick="openModal('modal-producto')"><i class="fa-solid fa-seedling"></i> + Producto</button>
             <button class="btn btn-outline" onclick="openModal('modal-actividad')"><i class="fa-solid fa-tasks"></i> + Actividad</button>
+            <button class="btn btn-outline" onclick="openModal('modal-unidad')"><i class="fa-solid fa-ruler"></i> + Unidad</button>
             <button class="btn btn-primary" onclick="abrirNuevoRendimiento()"><i class="fa-solid fa-plus"></i> + Rendimiento</button>
         </div>
 
@@ -630,9 +815,14 @@ App.registerView('rendimientos', async () => {
                 <h3><i class="fa-solid fa-layer-group" style="color:var(--primary);"></i> Áreas <span class="badge">${areas.length}</span></h3>
                 <div style="margin-top:0.75rem; max-height:180px; overflow-y:auto;">
                     ${areas.length ? areas.map(a => `
-                        <div style="display:flex; justify-content:space-between; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:0.4rem;">
-                            <span style="font-size:0.85rem;">${a.nombre}</span>
-                            <span class="badge" style="font-size:0.7rem;">${a.codigo}</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:0.4rem;">
+                            <div style="display:flex; flex-direction:column; gap:0.1rem;">
+                                <span style="font-size:0.85rem; font-weight:600; color:white;">${a.nombre}</span>
+                                <span style="font-size:0.68rem; color:var(--text-muted);">${a.codigo}</span>
+                            </div>
+                            <button onclick="abrirEditarArea(${a.id})" style="background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.3); border-radius:4px; padding:2px 6px; cursor:pointer;">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
                         </div>`).join('') : '<p style="color:var(--text-muted); font-size:0.85rem;">Sin áreas</p>'}
                 </div>
             </div>
@@ -640,9 +830,14 @@ App.registerView('rendimientos', async () => {
                 <h3><i class="fa-solid fa-seedling" style="color:var(--secondary);"></i> Cultivos <span class="badge">${productos.length}</span></h3>
                 <div style="margin-top:0.75rem; max-height:180px; overflow-y:auto;">
                     ${productos.length ? productos.map(p => `
-                        <div style="display:flex; justify-content:space-between; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:0.4rem;">
-                            <span style="font-size:0.85rem;">${p.nombre}</span>
-                            <span class="badge" style="font-size:0.7rem;">${p.densidad} pl/cama</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:0.4rem;">
+                            <div style="display:flex; flex-direction:column; gap:0.1rem;">
+                                <span style="font-size:0.85rem; font-weight:600; color:white;">${p.nombre}</span>
+                                <span style="font-size:0.68rem; color:var(--text-muted);">${p.codigo} - ${p.densidad} pl/cama</span>
+                            </div>
+                            <button onclick="abrirEditarProducto(${p.id})" style="background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.3); border-radius:4px; padding:2px 6px; cursor:pointer;">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
                         </div>`).join('') : '<p style="color:var(--text-muted); font-size:0.85rem;">Sin cultivos</p>'}
                 </div>
             </div>
@@ -650,9 +845,14 @@ App.registerView('rendimientos', async () => {
                 <h3><i class="fa-solid fa-ruler" style="color:#F59E0B;"></i> Unidades de Medida <span class="badge">${unidades.length}</span></h3>
                 <div style="margin-top:0.75rem; max-height:180px; overflow-y:auto;">
                     ${unidades.length ? unidades.map(u => `
-                        <div style="display:flex; justify-content:space-between; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:0.4rem;">
-                            <span style="font-size:0.82rem;">${u.nombre}</span>
-                            <span class="badge" style="font-size:0.68rem; background:rgba(245,158,11,0.2); color:#FCD34D;">${u.codigo}</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:0.4rem;">
+                            <div style="display:flex; flex-direction:column; gap:0.1rem;">
+                                <span style="font-size:0.82rem; font-weight:600; color:white;">${u.nombre}</span>
+                                <span style="font-size:0.68rem; color:#FCD34D;">${u.codigo}</span>
+                            </div>
+                            <button onclick="abrirEditarUnidad(${u.id})" style="background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.3); border-radius:4px; padding:2px 6px; cursor:pointer;">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
                         </div>`).join('') : '<p style="color:var(--text-muted); font-size:0.85rem;">Sin unidades</p>'}
                 </div>
             </div>
