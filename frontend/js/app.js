@@ -2,6 +2,24 @@
 const App = {
     views: {},
     currentView: null,
+    BLOQUES: [
+        '11','12','13','14','15','16','21','22','23','24','25','26','27','28','29',
+        '31','32','33','34','35','36','37','38','39','41','51K','51J','51I',
+        '71','72','73','75','76','77','79','80','150','151','152','153','154','155',
+        '81','82','83','84','85','86','87','89','90','91','92','94','95',
+        '105','106','107','108','109','110','111','112','113','114','115','116','117','118','119','120','121',
+        '124','125','126','127','129','131','132','133','134','136','137','138','139','140','141','142',
+        '201','202','203','204','205','207','208','209','210','211','212','213','214','215','216','217','218','219','220','221','222','223','224','225','226','227','228','229',
+        '11A','11B','11C','122','123','128','130','12A','12B','12C','12D','135','13A','13B','13C','13D',
+        '14A','14B','14C','14D','51L','51M','15A','15B','17A','18A','200','206',
+        '21A','21B','21C','21D','22A','22B','22C','23A','23B','29A',
+        '31A','31B','31C','31D','31E','31F','31G','32A','32B','32C','33A','33B','33C','33D','33E',
+        '34A','34B','34C','35A','35B','35C','36A','36B','36C','37B','37D','37E','37F','37G','37H',
+        '38A','38B','38C','39A','39B','39C','39D','39D-1','39E','39F','39G','39H','39I','39J','39K','39L',
+        '41A','41B','41C','41D','41E','41F','41G','41H','41I','41J',
+        '51H','51G','51E','51F','51D','51C','51B','51A','51','74','81B','89B',
+        '100','101','102','103','104','96','97','98'
+    ],
     
     registerView: function(name, renderFunc) {
         this.views[name] = renderFunc;
@@ -58,6 +76,7 @@ const App = {
             }, 100);
             
             this.currentView = viewName;
+            localStorage.setItem('activeView', viewName);
         }
     },
     
@@ -86,6 +105,16 @@ const App = {
             }
         }
         return online;
+    },
+    
+    syncUserProfile: async function() {
+        try {
+            const userProfile = await api.getMe();
+            localStorage.setItem('user', JSON.stringify(userProfile));
+            this.checkAuth();
+        } catch (err) {
+            console.error('Error syncing user profile:', err);
+        }
     },
      checkAuth: function() {
         const token = localStorage.getItem('token');
@@ -157,6 +186,7 @@ const App = {
     logout: function() {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('activeView');
         window.location.reload();
     },
     
@@ -243,6 +273,19 @@ const App = {
     },
 
     init: function() {
+        // Crear y poblar el datalist global de bloques para autocompletado en celulares
+        let datalist = document.getElementById('list-bloques');
+        if (!datalist) {
+            datalist = document.createElement('datalist');
+            datalist.id = 'list-bloques';
+            this.BLOQUES.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                datalist.appendChild(opt);
+            });
+            document.body.appendChild(datalist);
+        }
+
         // Event listeners para Navegación
         document.querySelectorAll('.nav-item').forEach(link => {
             link.addEventListener('click', (e) => {
@@ -260,6 +303,10 @@ const App = {
             
             const isOnline = await this.verificarConexionYBadge(false);
             
+            if (isOnline) {
+                await this.syncUserProfile();
+            }
+            
             setTimeout(() => {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sincronizar';
@@ -275,7 +322,9 @@ const App = {
         
         // Verificar autenticación
         if (this.checkAuth()) {
-            this.navigate('dashboard');
+            const savedView = localStorage.getItem('activeView') || 'dashboard';
+            this.navigate(savedView);
+            this.syncUserProfile();
             setTimeout(() => this.verificarConexionYBadge(true), 500);
             this.startAlertPolling();
         }

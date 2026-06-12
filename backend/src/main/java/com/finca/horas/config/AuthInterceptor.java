@@ -1,6 +1,8 @@
 package com.finca.horas.config;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
+import com.finca.horas.entities.Usuario;
+import com.finca.horas.repositories.UsuarioRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +14,9 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Autowired
     private JWTUtil jwtUtil;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -39,12 +44,22 @@ public class AuthInterceptor implements HandlerInterceptor {
         String token = authHeader.substring(7);
         try {
             DecodedJWT jwt = jwtUtil.verificarToken(token);
+            String username = jwt.getSubject();
             
-            // Adjuntar información del usuario a la solicitud
-            request.setAttribute("username", jwt.getSubject());
-            request.setAttribute("rol", jwt.getClaim("rol").asString());
-            request.setAttribute("modificarRendimientos", jwt.getClaim("modificarRendimientos").asBoolean());
-            request.setAttribute("actividadesPermitidas", jwt.getClaim("actividadesPermitidas").asString());
+            // Buscar el usuario en la base de datos para obtener permisos actualizados en tiempo real
+            Usuario usuario = usuarioRepository.findByUsername(username).orElse(null);
+            if (usuario == null || !usuario.getActivo()) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("{\"error\": \"Acceso no autorizado: Usuario no encontrado o inactivo\"}");
+                response.setContentType("application/json");
+                return false;
+            }
+            
+            // Adjuntar información actualizada del usuario a la solicitud
+            request.setAttribute("username", username);
+            request.setAttribute("rol", usuario.getRol());
+            request.setAttribute("modificarRendimientos", usuario.getModificarRendimientos());
+            request.setAttribute("actividadesPermitidas", usuario.getActividadesPermitidas() != null ? usuario.getActividadesPermitidas() : "");
             
             return true;
         } catch (Exception e) {

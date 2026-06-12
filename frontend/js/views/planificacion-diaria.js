@@ -795,7 +795,7 @@ App.registerView('planificacion-diaria', async () => {
                 </div>
                 <div id="diario-act-bloque-container-${id}" style="display:none;">
                     <label id="diario-act-bloque-label-${id}" style="display:block; margin-bottom:0.4rem; font-size:0.8rem; color:var(--text-muted);">Bloque / Válvula</label>
-                    <input type="text" id="diario-act-bloque-${id}" placeholder="Ej: B1" style="width:100%; padding:0.5rem; border-radius:6px; background:#1E293B; border:1px solid rgba(255,255,255,0.15); color:white;">
+                    <input type="text" id="diario-act-bloque-${id}" list="list-bloques" placeholder="Ej: B1" style="width:100%; padding:0.5rem; border-radius:6px; background:#1E293B; border:1px solid rgba(255,255,255,0.15); color:white;" onfocus="this.select()">
                 </div>
                 <div>
                     <label style="display:block; margin-bottom:0.4rem; font-size:0.8rem; color:var(--text-muted);">Unidades *</label>
@@ -983,7 +983,9 @@ App.registerView('planificacion-diaria', async () => {
         const areaInputs = document.querySelectorAll('select[id^="diario-act-area-"]');
         const itemsToSave = [];
         
+        let hasError = false;
         areaInputs.forEach(areaSelect => {
+            if (hasError) return;
             const matches = areaSelect.id.match(/diario-act-area-(\d+)/);
             if (!matches) return;
             const id = matches[1];
@@ -997,6 +999,14 @@ App.registerView('planificacion-diaria', async () => {
             const observacion = document.getElementById(`diario-act-observacion-${id}`).value?.trim() || '';
             
             if (actividadId && unidades > 0 && rendimiento > 0) {
+                const actividad = actividades.find(a => a.id == actividadId);
+                const laborMadre = actividad?.laborMadre;
+                const esCosecha = laborMadre && laborMadre.toUpperCase() === 'COSECHA';
+                if (!esCosecha && !bloque) {
+                    showNotification(`El campo bloque/válvula es obligatorio para la actividad "${actividad?.nombre || ''}"`, 'warning');
+                    hasError = true;
+                    return;
+                }
                 itemsToSave.push({
                     actividadId: parseInt(actividadId),
                     bloque,
@@ -1006,6 +1016,8 @@ App.registerView('planificacion-diaria', async () => {
                 });
             }
         });
+        
+        if (hasError) return;
         
         if (itemsToSave.length === 0) {
             showNotification('Completa al menos una actividad con unidades y rendimiento válidos.', 'error');

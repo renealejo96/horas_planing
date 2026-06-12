@@ -4,24 +4,7 @@ App.registerView('planificacion', async () => {
         'GYPSOPHILA': 25, 'HYPERICUM': 25, 'VERONICA': 25, 'SOLIDAGO': 25, 'SUNFLOWER': 30, 'Eucalitpos': 25
     };
     
-    const BLOQUES = [
-        '11','12','13','14','15','16','21','22','23','24','25','26','27','28','29',
-        '31','32','33','34','35','36','37','38','39','41','51K','51J','51I',
-        '71','72','73','75','76','77','79','80','150','151','152','153','154','155',
-        '81','82','83','84','85','86','87','89','90','91','92','94','95',
-        '105','106','107','108','109','110','111','112','113','114','115','116','117','118','119','120','121',
-        '124','125','126','127','129','131','132','133','134','136','137','138','139','140','141','142',
-        '201','202','203','204','205','207','208','209','210','211','212','213','214','215','216','217','218','219','220','221','222','223','224','225','226','227','228','229',
-        '11A','11B','11C','122','123','128','130','12A','12B','12C','12D','135','13A','13B','13C','13D',
-        '14A','14B','14C','14D','51L','51M','15A','15B','17A','18A','200','206',
-        '21A','21B','21C','21D','22A','22B','22C','23A','23B','29A',
-        '31A','31B','31C','31D','31E','31F','31G','32A','32B','32C','33A','33B','33C','33D','33E',
-        '34A','34B','34C','35A','35B','35C','36A','36B','36C','37B','37D','37E','37F','37G','37H',
-        '38A','38B','38C','39A','39B','39C','39D','39D-1','39E','39F','39G','39H','39I','39J','39K','39L',
-        '41A','41B','41C','41D','41E','41F','41G','41H','41I','41J',
-        '51H','51G','51E','51F','51D','51C','51B','51A','51','74','81B','89B',
-        '100','101','102','103','104','96','97','98'
-    ];
+    const BLOQUES = App.BLOQUES;
     
     // ========== ESTADO ==========
     let semanaActual = null, semanaSiguiente = null, grupos = [], planificacionItems = [];
@@ -42,8 +25,15 @@ App.registerView('planificacion', async () => {
             api.getGrupos().catch(() => []),
             api.getSemanasDisponibles().catch(() => [])
         ]);
-        // Usar semana actual como predeterminado (no la siguiente)
-        semanaSeleccionada = semanaActual || semanaSiguiente;
+        // A partir del miércoles, predeterminar la semana siguiente para evitar errores de llenado
+        const hoy = new Date();
+        const diaSemana = hoy.getDay(); // 0 = Domingo, 3 = Miércoles, 4 = Jueves, etc.
+        const esMiercolesODespues = (diaSemana === 0 || diaSemana >= 3);
+        if (esMiercolesODespues && semanaSiguiente) {
+            semanaSeleccionada = semanaSiguiente;
+        } else {
+            semanaSeleccionada = semanaActual || semanaSiguiente;
+        }
         if (semanaSeleccionada) {
             planificacionItems = await api.getPlanificacionSemana(semanaSeleccionada.codigoAass).catch(() => []);
         }
@@ -235,6 +225,18 @@ App.registerView('planificacion', async () => {
     };
 
     window.guardarFilaCosecha = async (cultivoCodigo, actId) => {
+        // Restricción de miércoles en adelante para semana actual (solo para supervisores)
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.rol !== 'ADMIN') {
+            const hoy = new Date();
+            const diaSemana = hoy.getDay();
+            const esMiercolesODespues = (diaSemana === 0 || diaSemana >= 3);
+            if (esMiercolesODespues && semanaActual && semanaSeleccionada && semanaSeleccionada.id === semanaActual.id) {
+                showNotification('A partir del miércoles no se permite ingresar nuevas planificaciones para la semana actual.', 'error');
+                return;
+            }
+        }
+
         const row = document.querySelector(`#cosecha-form .cosecha-row[data-cultivo="${cultivoCodigo}"]`);
         if (!row) return;
         const inp = row.querySelector('.inp-cantidad');
@@ -354,11 +356,9 @@ App.registerView('planificacion', async () => {
                 <div style="font-weight:600; color:var(--text-muted); width:20px; text-align:center; font-size:0.8rem;">${index}</div>
                 
                 <!-- Celda Bloque -->
-                <select class="sel-bloque" data-fila="${filaId}" 
-                    style="flex:1.2; padding:0.35rem; background:#1E293B; color:white; border-radius:4px; border:1px solid rgba(255,255,255,0.15); font-size:0.85rem;">
-                    <option value="">Bloque</option>
-                    ${renderBloqueOptions(saved.bloque)}
-                </select>
+                <input list="list-bloques" class="sel-bloque" data-fila="${filaId}" value="${saved.bloque || ''}" placeholder="Bloque"
+                    style="flex:1.2; padding:0.35rem; background:#1E293B; color:white; border-radius:4px; border:1px solid rgba(255,255,255,0.15); font-size:0.85rem;"
+                    onfocus="this.select()">
 
                 <!-- Celda Rendimiento (Visual) -->
                 <div style="width:65px; text-align:center; background:rgba(0,0,0,0.2); border-radius:4px; padding:0.35rem 0; font-size:0.75rem; color:#94A3B8; border:1px solid rgba(255,255,255,0.05);">
@@ -478,10 +478,9 @@ App.registerView('planificacion', async () => {
                                     ${subInfoStr}
                                 </td>
                                 <td style="padding:0.5rem;">
-                                    <select id="edit-bloque-${p.id}" style="width:100%; padding:0.3rem; background:#1E293B; color:white; border-radius:4px; border:1px solid #3B82F6; font-size:0.7rem;">
-                                        <option value="">-</option>
-                                        ${renderBloqueOptions(p.bloque || '')}
-                                    </select>
+                                    <input list="list-bloques" id="edit-bloque-${p.id}" value="${p.bloque || ''}" placeholder="Bloque"
+                                        style="width:100%; padding:0.3rem; background:#1E293B; color:white; border-radius:4px; border:1px solid #3B82F6; font-size:0.7rem;"
+                                        onfocus="this.select()">
                                 </td>
                                 <td style="padding:0.5rem; text-align:center;">
                                     <input type="number" id="edit-cant-${p.id}" value="${p.unidadesPlanificadas || 0}" onfocus="this.select()"
@@ -594,6 +593,24 @@ App.registerView('planificacion', async () => {
         const cantidad = parseFloat(inp?.value) || 0;
         const bloque = sel?.value || '';
         if (cantidad <= 0) { showNotification('Ingresa una cantidad mayor a 0', 'warning'); return; }
+
+        // Validar que el bloque no esté vacío (excepto para COSECHA)
+        if (grupoActivo !== 'COSECHA' && !bloque) {
+            showNotification('El campo bloque es obligatorio', 'warning');
+            return;
+        }
+
+        // Restricción de miércoles en adelante para semana actual (solo para supervisores)
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.rol !== 'ADMIN') {
+            const hoy = new Date();
+            const diaSemana = hoy.getDay();
+            const esMiercolesODespues = (diaSemana === 0 || diaSemana >= 3);
+            if (esMiercolesODespues && semanaActual && semanaSeleccionada && semanaSeleccionada.id === semanaActual.id) {
+                showNotification('A partir del miércoles no se permite ingresar nuevas planificaciones para la semana actual.', 'error');
+                return;
+            }
+        }
         const rend = parseFloat(inp.dataset.rend) || 1;
         const actId = parseInt(inp.dataset.actid);
         const horas = cantidad / rend;
@@ -785,11 +802,9 @@ App.registerView('planificacion', async () => {
         return `
             <div data-fila="${filaId}" style="display:flex; align-items:center; gap:0.4rem;">
                 <div style="font-weight:600; color:var(--text-muted); width:28px; text-align:center; font-size:0.75rem; background: rgba(0,0,0,0.2); border-radius: 4px; padding: 0.2rem 0;">#${index}</div>
-                <select class="sel-bloque" data-fila="${filaId}" 
-                    style="flex:1; padding:0.35rem; background:#1E293B; color:white; border-radius:6px; border:1px solid rgba(255,255,255,0.2); font-size:0.8rem;">
-                    <option value="">Bloque</option>
-                    ${renderBloqueOptions(saved.bloque)}
-                </select>
+                <input list="list-bloques" class="sel-bloque" data-fila="${filaId}" value="${saved.bloque || ''}" placeholder="Bloque"
+                    style="flex:1; padding:0.35rem; background:#1E293B; color:white; border-radius:6px; border:1px solid rgba(255,255,255,0.2); font-size:0.8rem;"
+                    onfocus="this.select()">
                 <input type="number" class="inp-cantidad" data-fila="${filaId}" data-rend="${laborData.rendimiento}" 
                        data-actid="${laborData.actividadId}" data-unidad="${laborData.unidadCodigo || 'CAMAS_HORA'}" value="${saved.cantidad || ''}"
                        placeholder="${placeholder}" oninput="calcHoras('${filaId}')" onfocus="this.select()"
@@ -856,9 +871,36 @@ App.registerView('planificacion', async () => {
     };
     
     window.guardarTodo = async () => {
+        // Restricción de miércoles en adelante para semana actual (solo para supervisores)
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.rol !== 'ADMIN') {
+            const hoy = new Date();
+            const diaSemana = hoy.getDay();
+            const esMiercolesODespues = (diaSemana === 0 || diaSemana >= 3);
+            if (esMiercolesODespues && semanaActual && semanaSeleccionada && semanaSeleccionada.id === semanaActual.id) {
+                showNotification('A partir del miércoles no se permite ingresar nuevas planificaciones para la semana actual.', 'error');
+                return;
+            }
+        }
+
         guardarValoresActuales();
         let guardados = 0, errores = 0;
         
+        // Validar que todas las filas tengan bloque si no es COSECHA
+        if (!esCosecha()) {
+            const filas = document.querySelectorAll('#labor-input div[data-fila]');
+            for (const fila of filas) {
+                const inp = fila.querySelector('.inp-cantidad');
+                const sel = fila.querySelector('.sel-bloque');
+                const cantidad = parseFloat(inp?.value) || 0;
+                const bloque = sel?.value || '';
+                if (cantidad > 0 && !bloque) {
+                    showNotification('El campo bloque es obligatorio para todas las actividades planificadas.', 'warning');
+                    return;
+                }
+            }
+        }
+
         if (esCosecha()) {
             const rows = document.querySelectorAll('#cosecha-form .cosecha-row');
             for (const row of rows) {

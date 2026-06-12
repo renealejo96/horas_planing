@@ -6,6 +6,8 @@ import com.finca.horas.entities.Semana.EstadoSemana;
 import com.finca.horas.entities.Rendimiento;
 import com.finca.horas.entities.PlanificacionDiaria;
 import com.finca.horas.entities.EjecucionActividad;
+import com.finca.horas.entities.Actividad;
+import com.finca.horas.repositories.ActividadRepository;
 import com.finca.horas.repositories.PlanificacionActividadRepository;
 import com.finca.horas.repositories.SemanaRepository;
 import com.finca.horas.repositories.PlanificacionDiariaRepository;
@@ -36,6 +38,9 @@ public class PlanificacionService {
 
     @Autowired
     private EjecucionActividadRepository ejecucionActividadRepo;
+
+    @Autowired
+    private ActividadRepository actividadRepo;
 
     // ==================== SEMANAS ====================
 
@@ -158,6 +163,22 @@ public class PlanificacionService {
         Semana semana = semanaRepo.findById(act.getSemana().getId()).orElseThrow();
         if (Boolean.TRUE.equals(semana.getPlanificacionCerrada())) {
             throw new RuntimeException("La planificación para esta semana ya está cerrada.");
+        }
+
+        // Validar que el bloque no esté vacío (a excepción de la actividad madre COSECHA)
+        if (act.getActividad() == null || act.getActividad().getId() == null) {
+            throw new RuntimeException("La actividad es obligatoria");
+        }
+        Actividad actividad = actividadRepo.findById(act.getActividad().getId())
+            .orElseThrow(() -> new RuntimeException("Actividad no encontrada"));
+        
+        String laborMadre = actividad.getLaborMadre();
+        if (laborMadre == null || !laborMadre.equalsIgnoreCase("COSECHA")) {
+            boolean tieneBloque = act.getBloque() != null && !act.getBloque().trim().isEmpty();
+            boolean tieneValvulas = act.getValvulas() != null && !act.getValvulas().trim().isEmpty();
+            if (!tieneBloque && !tieneValvulas) {
+                throw new RuntimeException("El campo bloque es obligatorio para la actividad madre: " + (laborMadre != null ? laborMadre : ""));
+            }
         }
 
         // Cálculo de horas: unidades / rendimiento (considerando factor)

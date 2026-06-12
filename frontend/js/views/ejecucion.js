@@ -1213,7 +1213,7 @@ App.registerView('ejecucion', async () => {
                         </div>
                         <div id="agregar-bloque-container" style="display:none;">
                             <label id="agregar-bloque-label" style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Bloque(s)</label>
-                            <input type="text" id="agregar-bloque" placeholder="Ej: B1, B2" style="width:100%; padding:0.6rem; border-radius:8px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white;">
+                            <input type="text" id="agregar-bloque" list="list-bloques" placeholder="Ej: B1, B2" style="width:100%; padding:0.6rem; border-radius:8px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white;" onfocus="this.select()">
                         </div>
                         <div>
                             <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Rendimiento (unid/h)</label>

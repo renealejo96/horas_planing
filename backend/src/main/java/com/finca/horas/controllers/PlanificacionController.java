@@ -5,6 +5,7 @@ import com.finca.horas.entities.Semana;
 import com.finca.horas.entities.Actividad;
 import com.finca.horas.repositories.ActividadRepository;
 import com.finca.horas.repositories.PlanificacionActividadRepository;
+import com.finca.horas.repositories.SemanaRepository;
 import com.finca.horas.services.PlanificacionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ public class PlanificacionController {
 
     @Autowired
     private PlanificacionActividadRepository planActividadRepository;
+
+    @Autowired
+    private SemanaRepository semanaRepository;
 
     // ==================== SEMANAS ====================
 
@@ -110,6 +114,30 @@ public class PlanificacionController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("error", "Acceso denegado: No tienes permisos para planificar esta actividad"));
         }
+
+        // A partir del miércoles (inclusive), bloquear el ingreso de nuevas planificaciones para la semana actual a SUPERVISORES
+        String rol = (String) request.getAttribute("rol");
+        if (!"ADMIN".equals(rol)) {
+            java.time.LocalDate hoy = java.time.LocalDate.now();
+            java.time.DayOfWeek dia = hoy.getDayOfWeek();
+            boolean esMiercolesODespues = (dia == java.time.DayOfWeek.WEDNESDAY || 
+                                           dia == java.time.DayOfWeek.THURSDAY || 
+                                           dia == java.time.DayOfWeek.FRIDAY || 
+                                           dia == java.time.DayOfWeek.SATURDAY || 
+                                           dia == java.time.DayOfWeek.SUNDAY);
+            if (esMiercolesODespues) {
+                if (act.getSemana() != null && act.getSemana().getId() != null) {
+                    Semana sem = semanaRepository.findById(act.getSemana().getId()).orElse(null);
+                    if (sem != null) {
+                        boolean esSemanaActual = !hoy.isBefore(sem.getFechaInicio()) && !hoy.isAfter(sem.getFechaFin());
+                        if (esSemanaActual) {
+                            return ResponseEntity.badRequest().body(Map.of("error", "A partir del miércoles no se permite ingresar nuevas planificaciones para la semana actual. Por favor, planifica para la siguiente semana."));
+                        }
+                    }
+                }
+            }
+        }
+
         return ResponseEntity.ok(planificacionService.planificarActividad(act));
     }
     
