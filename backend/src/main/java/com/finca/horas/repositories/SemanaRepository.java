@@ -15,7 +15,7 @@ public interface SemanaRepository extends JpaRepository<Semana, Long> {
     Optional<Semana> findByAnioAndSemana(Integer anio, Integer semana);
     List<Semana> findByEstado(EstadoSemana estado);
     
-    @Query("SELECT s FROM Semana s WHERE s.fechaInicio <= :fecha AND s.fechaFin >= :fecha")
+    @Query("SELECT s FROM Semana s WHERE CAST(s.fechaInicio AS date) <= :fecha AND CAST(s.fechaFin AS date) >= :fecha")
     Optional<Semana> findByFecha(LocalDate fecha);
     
     @Query("SELECT s FROM Semana s WHERE s.estado IN ('PLANIFICACION', 'EN_EJECUCION') ORDER BY s.fechaInicio")

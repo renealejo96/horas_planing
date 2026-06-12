@@ -54,7 +54,11 @@ public class PlanificacionService {
     
     public Optional<Semana> obtenerSemanaActual() {
         LocalDate hoy = LocalDate.now();
-        Optional<Semana> semana = semanaRepo.findByFecha(hoy);
+        WeekFields weekFields = WeekFields.of(Locale.getDefault());
+        int numSemana = hoy.get(weekFields.weekOfYear());
+        int anio = hoy.getYear();
+        
+        Optional<Semana> semana = semanaRepo.findByAnioAndSemana(anio, numSemana);
         
         // Si existe, asegurar que está en EN_EJECUCION
         semana.ifPresent(s -> {
@@ -70,7 +74,11 @@ public class PlanificacionService {
     
     public Optional<Semana> obtenerSemanaSiguiente() {
         LocalDate proximoLunes = LocalDate.now().plusWeeks(1).with(DayOfWeek.MONDAY);
-        Optional<Semana> semana = semanaRepo.findByFecha(proximoLunes);
+        WeekFields weekFields = WeekFields.of(Locale.getDefault());
+        int numSemana = proximoLunes.get(weekFields.weekOfYear());
+        int anio = proximoLunes.getYear();
+        
+        Optional<Semana> semana = semanaRepo.findByAnioAndSemana(anio, numSemana);
         
         // Si existe, asegurar que está en PLANIFICACION
         semana.ifPresent(s -> {
