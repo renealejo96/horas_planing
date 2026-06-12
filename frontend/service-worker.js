@@ -1,5 +1,5 @@
 // Service Worker para PYGANFLOR - ver 3.0.0
-const CACHE_NAME = 'pyganflor-v3.0';
+const CACHE_NAME = 'pyganflor-v3.1';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
