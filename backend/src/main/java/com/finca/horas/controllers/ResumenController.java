@@ -34,7 +34,7 @@ public class ResumenController {
             return semanaRepo.findByCodigoAass(codigoAass).orElse(null);
         }
         // Fallback 1: Semana por fecha actual
-        Optional<Semana> currentByDate = semanaRepo.findByFecha(LocalDate.now());
+        Optional<Semana> currentByDate = semanaRepo.findByFecha(LocalDate.now(java.time.ZoneId.of("America/Guayaquil")));
         if (currentByDate.isPresent()) {
             return currentByDate.get();
         }

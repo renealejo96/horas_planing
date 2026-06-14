@@ -118,7 +118,7 @@ public class PlanificacionController {
         // A partir del miércoles (inclusive), bloquear el ingreso de nuevas planificaciones para la semana actual a SUPERVISORES
         String rol = (String) request.getAttribute("rol");
         if (!"ADMIN".equals(rol)) {
-            java.time.LocalDate hoy = java.time.LocalDate.now();
+            java.time.LocalDate hoy = java.time.LocalDate.now(java.time.ZoneId.of("America/Guayaquil"));
             java.time.DayOfWeek dia = hoy.getDayOfWeek();
             boolean esMiercolesODespues = (dia == java.time.DayOfWeek.WEDNESDAY || 
                                            dia == java.time.DayOfWeek.THURSDAY || 

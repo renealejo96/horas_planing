@@ -77,7 +77,7 @@ App.registerView('planificacion', async () => {
     
     // ========== GUARDAR VALORES ACTUALES ==========
     const guardarValoresActuales = () => {
-        document.querySelectorAll('#tabla-labores tr[data-fila], #cosecha-form .cosecha-row').forEach(row => {
+        document.querySelectorAll('div[data-fila], tr[data-fila], #cosecha-form .cosecha-row').forEach(row => {
             const filaId = row.dataset.fila || row.dataset.cultivo;
             const inp = row.querySelector('.inp-cantidad');
             const sel = row.querySelector('.sel-bloque');
@@ -632,7 +632,7 @@ App.registerView('planificacion', async () => {
             });
             showNotification(`✓ Guardado: ${horas.toFixed(2)}h`, 'success');
             inp.value = '';
-            if (sel) sel.selectedIndex = 0;
+            if (sel) sel.value = '';
             document.getElementById(`hrs-${filaId}`).textContent = '--';
             document.getElementById(`hrs-${filaId}`).style.color = 'var(--text-muted)';
             delete filasData[filaId];
@@ -959,7 +959,7 @@ App.registerView('planificacion', async () => {
                     });
                     guardados++;
                     inp.value = '';
-                    if (sel) sel.selectedIndex = 0;
+                    if (sel) sel.value = '';
                     document.getElementById(`hrs-${filaId}`).textContent = '--';
                     document.getElementById(`hrs-${filaId}`).style.color = 'var(--text-muted)';
                     delete filasData[filaId];

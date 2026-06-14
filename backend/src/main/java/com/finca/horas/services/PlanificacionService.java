@@ -53,12 +53,15 @@ public class PlanificacionService {
     }
     
     public Optional<Semana> obtenerSemanaActual() {
-        LocalDate hoy = LocalDate.now();
-        WeekFields weekFields = WeekFields.of(Locale.getDefault());
-        int numSemana = hoy.get(weekFields.weekOfYear());
-        int anio = hoy.getYear();
+        LocalDate hoy = LocalDate.now(java.time.ZoneId.of("America/Guayaquil"));
+        Optional<Semana> semana = semanaRepo.findByFecha(hoy);
         
-        Optional<Semana> semana = semanaRepo.findByAnioAndSemana(anio, numSemana);
+        if (semana.isEmpty()) {
+            WeekFields weekFields = WeekFields.ISO;
+            int numSemana = hoy.get(weekFields.weekOfYear());
+            int anio = hoy.getYear();
+            semana = semanaRepo.findByAnioAndSemana(anio, numSemana);
+        }
         
         // Si existe, asegurar que está en EN_EJECUCION
         semana.ifPresent(s -> {
@@ -73,12 +76,16 @@ public class PlanificacionService {
     }
     
     public Optional<Semana> obtenerSemanaSiguiente() {
-        LocalDate proximoLunes = LocalDate.now().plusWeeks(1).with(DayOfWeek.MONDAY);
-        WeekFields weekFields = WeekFields.of(Locale.getDefault());
-        int numSemana = proximoLunes.get(weekFields.weekOfYear());
-        int anio = proximoLunes.getYear();
+        LocalDate hoy = LocalDate.now(java.time.ZoneId.of("America/Guayaquil"));
+        LocalDate proximoLunes = hoy.plusWeeks(1).with(DayOfWeek.MONDAY);
+        Optional<Semana> semana = semanaRepo.findByFecha(proximoLunes);
         
-        Optional<Semana> semana = semanaRepo.findByAnioAndSemana(anio, numSemana);
+        if (semana.isEmpty()) {
+            WeekFields weekFields = WeekFields.ISO;
+            int numSemana = proximoLunes.get(weekFields.weekOfYear());
+            int anio = proximoLunes.getYear();
+            semana = semanaRepo.findByAnioAndSemana(anio, numSemana);
+        }
         
         // Si existe, asegurar que está en PLANIFICACION
         semana.ifPresent(s -> {
@@ -94,7 +101,7 @@ public class PlanificacionService {
     
     public List<Semana> generarSemanasAnio(Integer anio, Integer cantidad) {
         List<Semana> semanas = new ArrayList<>();
-        WeekFields weekFields = WeekFields.of(Locale.getDefault());
+        WeekFields weekFields = WeekFields.ISO;
         
         LocalDate fecha = LocalDate.of(anio, 1, 1).with(DayOfWeek.MONDAY);
         if (fecha.getYear() < anio) {
