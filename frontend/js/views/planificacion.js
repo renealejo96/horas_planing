@@ -25,6 +25,17 @@ App.registerView('planificacion', async () => {
             api.getGrupos().catch(() => []),
             api.getSemanasDisponibles().catch(() => [])
         ]);
+        
+        // Filtrar grupos por permisos de usuario
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.rol !== 'ADMIN') {
+            const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
+            grupos = grupos.filter(g => {
+                const grupoNombre = typeof g === 'string' ? g : (g.nombre || g.codigo || String(g));
+                return permitidas.includes(grupoNombre.toUpperCase());
+            });
+        }
+
         // A partir del miércoles, predeterminar la semana siguiente para evitar errores de llenado
         const hoy = new Date();
         const diaSemana = hoy.getDay(); // 0 = Domingo, 3 = Miércoles, 4 = Jueves, etc.
@@ -36,6 +47,16 @@ App.registerView('planificacion', async () => {
         }
         if (semanaSeleccionada) {
             planificacionItems = await api.getPlanificacionSemana(semanaSeleccionada.codigoAass).catch(() => []);
+            
+            // Filtrar planificacionItems por permisos
+            if (user.rol !== 'ADMIN') {
+                const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
+                planificacionItems = planificacionItems.filter(p => {
+                    const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'GENERAL').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return permitidas.includes(grupo);
+                });
+            }
         }
     } catch (e) { console.log('Error cargando datos iniciales:', e); }
     
@@ -449,6 +470,12 @@ App.registerView('planificacion', async () => {
             `;
 
             if (isExpanded) {
+                // Ordenar por orden alfabético
+                items.sort((a, b) => {
+                    const nameA = (a.actividad?.nombre || '').toUpperCase();
+                    const nameB = (b.actividad?.nombre || '').toUpperCase();
+                    return nameA.localeCompare(nameB);
+                });
                 // Items del cultivo
                 items.forEach(p => {
                     const isEditing = editandoId === p.id;

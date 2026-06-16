@@ -227,6 +227,10 @@ public class PlanificacionService {
                     existing.setHorasAjustadas(act.getHorasAjustadas());
                 }
                 
+                // Guardar bloque y valvulas
+                existing.setBloque(act.getBloque());
+                existing.setValvulas(act.getValvulas());
+                
                 calcularHoras(existing);
                 return planificacionRepo.save(existing);
             });

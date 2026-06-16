@@ -17,25 +17,51 @@ App.registerView('ejecucion', async () => {
     const fechaHoy = getLocalIsoDate(hoy);
 
     // Cargar semana en ejecución y su planificación
-    let semanaActual = null, planDiarioArr = [], planificacionItems = [], ejecuciones = [], areas = [], actividades = [], rendimientos = [], productos = [];
+    let semanaActual = null, planDiarioArr = [], planificacionItems = [], ejecuciones = [], areas = [], actividades = [], rendimientos = [], productos = [], fueraGrupos = [];
     let grupoActivo = null;
     let gruposUnicos = [];
     let fechaSeleccionada = window.fechaGlobalSeleccionada || fechaHoy;
     window.fechaGlobalSeleccionada = fechaSeleccionada;
     
     try {
-        [semanaActual, areas, actividades, ejecuciones, rendimientos, productos] = await Promise.all([
+        let grps = [];
+        [semanaActual, areas, actividades, ejecuciones, rendimientos, productos, grps] = await Promise.all([
             api.getSemanaActual().catch(() => null),
             api.getAreas().catch(() => []),
             api.getActividades().catch(() => []),
             api.getEjecuciones().catch(() => []),
             api.getRendimientos().catch(() => []),
-            api.getProductos().catch(() => [])
+            api.getProductos().catch(() => []),
+            api.getGrupos().catch(() => [])
         ]);
+        
+        fueraGrupos = grps;
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.rol !== 'ADMIN') {
+            const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
+            fueraGrupos = fueraGrupos.filter(g => permitidas.includes(g.toUpperCase()));
+        }
         
         if (semanaActual) {
             planificacionItems = await api.getPlanificacionSemana(semanaActual.codigoAass).catch(() => []);
             planDiarioArr = await api.getPlanDiarioFecha(fechaSeleccionada).catch(() => []);
+            
+            // Filtrar por permisos de usuario
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.rol !== 'ADMIN') {
+                const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
+                planificacionItems = planificacionItems.filter(p => {
+                    const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'OTRO').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return permitidas.includes(grupo);
+                });
+                planDiarioArr = planDiarioArr.filter(pd => {
+                    if (!pd.planificacion) return false;
+                    const rawName = (pd.planificacion.actividad?.laborMadre || pd.planificacion.actividad?.grupo || pd.planificacion.actividad?.nombre || 'OTRO').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return permitidas.includes(grupo);
+                });
+            }
             
             // Extraer grupos únicos para Ejecución
             const gruposSet = new Set();
@@ -513,204 +539,379 @@ App.registerView('ejecucion', async () => {
             r.actividad.nombre.toUpperCase() === a.nombre.toUpperCase() &&
             r.grupo && (r.grupo.toUpperCase() === cleanAreaCode || r.grupo.toUpperCase() === cleanAreaNombre)
         );
-        if (hasMatchingYieldByName) return true;
-        
-        return false;
+};
+
+    // ========== ESTADO ACTIVIDADES FUERA PLAN ==========
+    let fueraGrupoActivo = null;
+    let fueraCultivoActivo = null;
+    let fueraLaborActiva = null;
+    let fueraCultivosGrupo = [];
+    let fueraRendimientosGrupo = [];
+    let fueraFilasData = {};
+    let fueraFilaCounter = 0;
+
+    const getFueraCultivosDelGrupo = () => {
+        const cultivosMap = new Map();
+        fueraRendimientosGrupo.forEach(r => {
+            if (r.productoCodigo) {
+                cultivosMap.set(r.productoCodigo, r.producto);
+            } else {
+                cultivosMap.set('GENERAL', 'General');
+            }
+        });
+        return Array.from(cultivosMap.entries()).map(([codigo, nombre]) => ({ codigo, nombre }));
     };
 
-    // Filter crops (productos) for daily execution add form based on Area
-    window.filtrarCultivosEjecucion = (areaId) => {
-        const selectCultivo = document.getElementById('agregar-cultivo');
-        const selectAct = document.getElementById('agregar-actividad');
-        
-        selectAct.innerHTML = '<option value="">Selecciona cultivo primero</option>';
-        selectAct.disabled = true;
-        document.getElementById('agregar-bloque-container').style.display = 'none';
-        
-        if (!areaId) {
-            selectCultivo.innerHTML = '<option value="">Selecciona área primero</option>';
-            selectCultivo.disabled = true;
-            return;
+    const renderFueraCultivoCards = () => {
+        const cultivos = getFueraCultivosDelGrupo();
+        if (!cultivos.length) {
+            return '<div style="color:var(--text-muted); text-align:center; padding:0.5rem;">Selecciona una actividad madre arriba</div>';
         }
-        
-        const area = areas.find(ar => ar.id == areaId);
-        const cleanAreaCode = area?.codigo ? area.codigo.replace('PY_', '').toUpperCase() : '';
-        const cleanAreaNombre = area?.nombre ? area.nombre.toUpperCase() : '';
-        
-        // Find products that have yields defined in this Area (via group/area match or activity area match)
-        const prodIds = new Set(
-            rendimientos
-                .filter(r => r.producto && (
-                    (r.actividad?.area?.id == areaId) ||
-                    (r.grupo && cleanAreaCode && r.grupo.toUpperCase() === cleanAreaCode) ||
-                    (r.grupo && cleanAreaNombre && r.grupo.toUpperCase() === cleanAreaNombre)
-                ))
-                .map(r => r.producto.id)
-        );
-        const filteredProductos = productos.filter(p => prodIds.has(p.id));
-        const finalProductos = filteredProductos.length > 0 ? filteredProductos : productos;
-        
-        selectCultivo.innerHTML = '<option value="">Seleccionar cultivo...</option>' +
-            finalProductos.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
-        selectCultivo.disabled = false;
+        return cultivos.map(c => {
+            const codigo = c.codigo || c;
+            const nombre = c.nombre || c;
+            const isActive = fueraCultivoActivo === codigo ? 'active' : '';
+            return `
+                <button class="cultivo-card ${isActive}" onclick="fueraSeleccionarCultivo('${codigo}')">
+                    ${nombre}
+                </button>
+            `;
+        }).join('');
     };
 
-    // Función para filtrar actividades por área y cultivo (agregar línea)
-    window.filtrarActividadesAgregar = () => {
-        const areaId = document.getElementById('agregar-area').value;
-        const cultivoId = document.getElementById('agregar-cultivo').value;
-        const selectAct = document.getElementById('agregar-actividad');
-        
-        document.getElementById('agregar-bloque-container').style.display = 'none';
-        
-        if (!areaId || !cultivoId) {
-            selectAct.innerHTML = '<option value="">Selecciona cultivo primero</option>';
-            selectAct.disabled = true;
-            return;
+    const renderFueraLaborCards = () => {
+        const labores = fueraGetLaboresUnicas();
+        if (!labores.length) {
+            return '<div style="color:var(--text-muted); text-align:center; padding:0.5rem; font-size:0.8rem;">Selecciona un cultivo</div>';
+        }
+        return labores.map(r => {
+            const isActive = fueraLaborActiva === r.labor ? 'active' : '';
+            return `
+                <button class="labor-card ${isActive}" onclick="fueraSeleccionarLabor('${r.labor}')">
+                    ${r.labor} <span style="opacity:0.7; font-size:0.65rem;">(${r.rendimiento})</span>
+                </button>
+            `;
+        }).join('');
+    };
+
+    const fueraGetLaboresUnicas = () => {
+        const laboresFiltradas = fueraCultivoActivo 
+            ? fueraRendimientosGrupo.filter(r => r.productoCodigo === fueraCultivoActivo || r.producto.toUpperCase() === fueraCultivoActivo)
+            : [];
+        const laboresMap = new Map();
+        laboresFiltradas.forEach(r => {
+            if (!laboresMap.has(r.labor)) {
+                laboresMap.set(r.labor, r);
+            }
+        });
+        return Array.from(laboresMap.values());
+    };
+
+    const fueraGetPlaceholderUnidad = (unidadCodigo) => {
+        switch(unidadCodigo) {
+            case 'PLANTAS_HORA': return 'Plantas';
+            case 'MALLAS_HORA': return 'Mallas';
+            case 'PINGOS_HORA': return 'Pingos';
+            case 'CAMAS_HORA':
+            default: return 'Camas';
+        }
+    };
+
+    const renderFueraFilaInput = (laborData, filaId, saved, esAdicional, unidadCodigo = 'CAMAS_HORA', placeholder = 'Camas', index = 1) => {
+        return `
+            <div data-fila="${filaId}" style="display:flex; align-items:center; gap:0.2rem; margin-bottom:0.2rem; padding:0.2rem; background:rgba(255,255,255,0.03); border-radius:4px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-weight:600; color:var(--text-muted); width:20px; text-align:center; font-size:0.8rem;">${index}</div>
+                
+                <input list="list-bloques" class="fuera-sel-bloque" data-fila="${filaId}" value="${saved.bloque || ''}" placeholder="Bloque"
+                    style="flex:1.2; padding:0.35rem; background:#1E293B; color:white; border-radius:4px; border:1px solid rgba(255,255,255,0.15); font-size:0.85rem;"
+                    onfocus="this.select()">
+
+                <div style="width:65px; text-align:center; background:rgba(0,0,0,0.2); border-radius:4px; padding:0.35rem 0; font-size:0.75rem; color:#94A3B8; border:1px solid rgba(255,255,255,0.05);">
+                    ${laborData.rendimiento}
+                </div>
+
+                <input type="number" class="fuera-inp-cantidad" data-fila="${filaId}" data-rend="${laborData.rendimiento}" 
+                       data-actid="${laborData.actividadId}" data-unidad="${unidadCodigo}" value="${saved.cantidad || ''}"
+                       placeholder="${placeholder}" oninput="fueraCalcHoras('${filaId}')" onfocus="this.select()"
+                       style="width:85px; padding:0.35rem; background:#1E293B; color:white; border-radius:4px; border:1px solid rgba(255,255,255,0.15); font-size:0.9rem; text-align:center; font-weight:700;">
+                
+                <span id="fuera-hrs-${filaId}" style="min-width:55px; font-weight:700; color:${saved.cantidad ? '#10B981' : 'var(--text-muted)'}; text-align:center; font-size:0.85rem; background:rgba(0,0,0,0.15); border-radius:4px; padding:0.35rem 0;">
+                    ${saved.cantidad ? (parseFloat(saved.cantidad) / laborData.rendimiento).toFixed(2) + 'h' : '--'}
+                </span>
+
+                <div style="display:flex; gap:0.2rem; margin-left: 0.2rem;">
+                    ${!esAdicional ? 
+                        `<button onclick="fueraAgregarFilaLabor(${laborData.id})" title="+ Bloque" 
+                            style="width:26px; height:26px; background:rgba(59,130,246,0.15); color:#3B82F6; border:1px solid rgba(59,130,246,0.3); border-radius:4px; cursor:pointer; font-size:0.75rem;">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>` : 
+                        `<button onclick="fueraQuitarFilaLabor('${filaId}')" title="Quitar" 
+                            style="width:26px; height:26px; background:rgba(239,68,68,0.15); color:#EF4444; border:1px solid rgba(239,68,68,0.3); border-radius:4px; cursor:pointer; font-size:0.75rem;">
+                            <i class="fa-solid fa-minus"></i>
+                        </button>`
+                    }
+                </div>
+            </div>
+        `;
+    };
+
+    const renderFueraLaborInput = () => {
+        if (!fueraLaborActiva) {
+            return `<div style="text-align:center; color:var(--text-muted); padding:1rem;">
+                <i class="fa-solid fa-hand-pointer" style="font-size:1rem; margin-bottom:0.3rem; display:block;"></i>
+                Selecciona una labor arriba
+            </div>`;
         }
         
-        // Find activities belonging to this area and either general (!producto) or matching this crop or having yield for this crop
-        const actividadesArea = actividades.filter(a => {
-            const belongsToArea = activityBelongsToArea(a, areaId);
-            if (!belongsToArea) return false;
-            
-            const hasDirectCrop = a.producto && a.producto.id == cultivoId;
-            const isGeneral = !a.producto;
-            const hasYieldForCrop = rendimientos.some(r => 
-                r.producto?.id == cultivoId && 
-                (r.actividad?.id == a.id || (r.actividad?.nombre && a.nombre && r.actividad.nombre.toUpperCase() === a.nombre.toUpperCase()))
-            );
-            
-            return hasDirectCrop || isGeneral || hasYieldForCrop;
+        const laborData = fueraRendimientosGrupo.find(r => r.labor === fueraLaborActiva && (r.productoCodigo === fueraCultivoActivo || r.producto.toUpperCase() === fueraCultivoActivo));
+        if (!laborData) return '<div style="color:var(--text-muted); padding:1rem;">Labor no encontrada</div>';
+        
+        const unidadAbrev = laborData.unidadAbrev || 'cam/h';
+        const unidadCodigo = laborData.unidadCodigo || 'CAMAS_HORA';
+        const placeholder = fueraGetPlaceholderUnidad(unidadCodigo);
+        
+        const mainId = `fuera-main-${laborData.id}`;
+        const saved = fueraFilasData[mainId] || {};
+        const adicionales = Object.keys(fueraFilasData).filter(k => k.startsWith(`fuera-add-${laborData.id}-`));
+        
+        let html = `
+            <div style="padding:0.5rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; padding:0.5rem; background:rgba(16,185,129,0.1); border-radius:8px; border:1px solid rgba(16,185,129,0.3);">
+                    <span style="font-weight:600; color:#10B981; flex:1;">${laborData.labor}</span>
+                    <span style="background:rgba(16,185,129,0.2); color:#10B981; padding:0.2rem 0.5rem; border-radius:4px; font-size:0.8rem;">
+                        ${laborData.rendimiento} ${unidadAbrev}
+                    </span>
+                </div>
+        `;
+        
+        html += renderFueraFilaInput(laborData, mainId, saved, false, unidadCodigo, placeholder, 1);
+        
+        adicionales.forEach((filaId, index) => {
+            const savedAd = fueraFilasData[filaId] || {};
+            html += renderFueraFilaInput(laborData, filaId, savedAd, true, unidadCodigo, placeholder, index + 2);
         });
         
-        if (actividadesArea.length === 0) {
-            selectAct.innerHTML = '<option value="">Sin actividades para esta área y cultivo</option>';
-            selectAct.disabled = true;
-        } else {
-            // Eliminar duplicados visuales por nombre
-            const nombresVistos = new Set();
-            const actividadesUnicas = [];
-            actividadesArea.forEach(a => {
-                const nombreKey = (a.nombre || '').toUpperCase();
-                if (!nombresVistos.has(nombreKey)) {
-                    nombresVistos.add(nombreKey);
-                    actividadesUnicas.push(a);
-                }
-            });
+        html += '</div>';
+        return html;
+    };
+
+    const renderFueraContenidoLabores = () => {
+        const container = document.getElementById('fuera-contenido-labores');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div style="padding:0.5rem 0.75rem; background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.05)); border-bottom:1px solid rgba(16,185,129,0.3);">
+                <div style="font-size:0.65rem; color:#10B981; margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:1px; font-weight:600;">
+                    <i class="fa-solid fa-filter" style="margin-right:0.3rem;"></i> Selección de Cultivo y Labor
+                </div>
+            </div>
             
-            selectAct.innerHTML = '<option value="">Seleccionar...</option>' + 
-                actividadesUnicas.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('');
-            selectAct.disabled = false;
-        }
+            <div style="padding:0.75rem; display:flex; flex-direction:column; gap:0.75rem;">
+                <!-- Selector de Cultivo -->
+                <div id="fuera-cultivo-container" style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                    ${renderFueraCultivoCards()}
+                </div>
+                
+                <!-- Selector de Labor -->
+                <div id="fuera-labor-container" style="display:flex; gap:0.4rem; flex-wrap:wrap; min-height:30px;">
+                    ${renderFueraLaborCards()}
+                </div>
+                
+                <!-- Area de Input -->
+                <div id="fuera-labor-input" style="background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid rgba(255,255,255,0.05); min-height:80px;">
+                    ${renderFueraLaborInput()}
+                </div>
+            </div>
+        `;
     };
-    
-    // Función para mostrar campo bloque según actividad y cargar rendimiento
-    window.actualizarBloqueAgregar = (actividadId) => {
-        const actividad = actividades.find(a => a.id == actividadId);
-        const container = document.getElementById('agregar-bloque-container');
-        const label = document.getElementById('agregar-bloque-label');
-        const rendInput = document.getElementById('agregar-rendimiento');
-        const cultivoId = document.getElementById('agregar-cultivo').value;
-        
-        if (!actividad) {
-            container.style.display = 'none';
-            rendInput.value = '';
-            return;
-        }
-        
-        // Buscar rendimiento para esta actividad y cultivo, o fallback a general
-        let rend = rendimientos.find(r => r.actividad?.id == actividadId && r.producto?.id == cultivoId) ||
-                   rendimientos.find(r => r.actividad?.id == actividadId && !r.producto);
-                   
-        // Fallback: match by name if exact ID match fails
-        if (!rend && actividad.nombre) {
-            const nameUpper = actividad.nombre.toUpperCase();
-            rend = rendimientos.find(r => r.actividad?.nombre && r.actividad.nombre.toUpperCase() === nameUpper && r.producto?.id == cultivoId) ||
-                   rendimientos.find(r => r.actividad?.nombre && r.actividad.nombre.toUpperCase() === nameUpper && !r.producto);
-        }
-                     
-        const rendVal = rend ? (rend.rendimiento ?? rend.valorRendimiento ?? 0) : 0;
-        
-        if (rendVal > 0) {
-            rendInput.value = rendVal;
-            calcularHorasAgregar();
-        } else {
-            rendInput.value = '';
-        }
-        
-        if (actividad.esVarios) {
-            container.style.display = 'none';
-            return;
-        }
-        
-        container.style.display = 'block';
-        const esFerti = actividad.area?.codigo?.includes('FERTIRRIEGO');
-        label.textContent = esFerti ? 'Válvulas' : 'Bloque(s)';
+
+    const fueraGuardarValoresActuales = () => {
+        document.querySelectorAll('#fuera-labor-input div[data-fila]').forEach(row => {
+            const filaId = row.dataset.fila;
+            const inp = row.querySelector('.fuera-inp-cantidad');
+            const sel = row.querySelector('.fuera-sel-bloque');
+            if (inp && filaId) {
+                fueraFilasData[filaId] = {
+                    cantidad: inp.value || '',
+                    bloque: sel ? sel.value : ''
+                };
+            }
+        });
     };
-    
-    // Función para calcular horas en tiempo real (agregar línea)
-    window.calcularHorasAgregar = () => {
-        const unidades = parseFloat(document.getElementById('agregar-unidades').value) || 0;
-        const rendimiento = parseFloat(document.getElementById('agregar-rendimiento').value) || 0;
-        const span = document.getElementById('agregar-horas-preview');
+
+    window.fueraSeleccionarGrupo = async (grupo) => {
+        fueraGuardarValoresActuales();
+        fueraGrupoActivo = grupo;
+        fueraCultivoActivo = null;
+        fueraLaborActiva = null;
+        fueraFilasData = {};
         
-        if (rendimiento > 0 && unidades > 0) {
-            const horas = unidades / rendimiento;
-            span.textContent = `${horas.toFixed(2)} h`;
+        document.querySelectorAll('.fuera-grupo-tab').forEach(t => {
+            if (t.dataset.grupo === grupo) {
+                t.classList.add('active');
+            } else {
+                t.classList.remove('active');
+            }
+        });
+        
+        try {
+            [fueraCultivosGrupo, fueraRendimientosGrupo] = await Promise.all([
+                api.getCultivosPorGrupo(grupo),
+                api.getRendimientosPorGrupo(grupo)
+            ]);
+        } catch(e) { fueraCultivosGrupo = []; fueraRendimientosGrupo = []; }
+        
+        renderFueraContenidoLabores();
+    };
+
+    window.fueraSeleccionarCultivo = (cultivo) => {
+        fueraGuardarValoresActuales();
+        fueraCultivoActivo = cultivo;
+        fueraLaborActiva = null;
+        fueraFilasData = {};
+        
+        const cultCont = document.getElementById('fuera-cultivo-container');
+        const labCont = document.getElementById('fuera-labor-container');
+        const labInp = document.getElementById('fuera-labor-input');
+        
+        if (cultCont) cultCont.innerHTML = renderFueraCultivoCards();
+        if (labCont) labCont.innerHTML = renderFueraLaborCards();
+        if (labInp) labInp.innerHTML = renderFueraLaborInput();
+    };
+
+    window.fueraSeleccionarLabor = (labor) => {
+        fueraGuardarValoresActuales();
+        fueraLaborActiva = labor;
+        fueraFilasData = {};
+        
+        const labCont = document.getElementById('fuera-labor-container');
+        const labInp = document.getElementById('fuera-labor-input');
+        
+        if (labCont) labCont.innerHTML = renderFueraLaborCards();
+        if (labInp) labInp.innerHTML = renderFueraLaborInput();
+    };
+
+    window.fueraAgregarFilaLabor = (rendId) => {
+        fueraGuardarValoresActuales();
+        fueraFilaCounter++;
+        const newFilaId = `fuera-add-${rendId}-${fueraFilaCounter}`;
+        fueraFilasData[newFilaId] = { bloque: '', cantidad: '' };
+        document.getElementById('fuera-labor-input').innerHTML = renderFueraLaborInput();
+    };
+
+    window.fueraQuitarFilaLabor = (filaId) => {
+        fueraGuardarValoresActuales();
+        delete fueraFilasData[filaId];
+        document.getElementById('fuera-labor-input').innerHTML = renderFueraLaborInput();
+    };
+
+    window.fueraCalcHoras = (filaId) => {
+        const inp = document.querySelector(`.fuera-inp-cantidad[data-fila="${filaId}"]`);
+        const span = document.getElementById(`fuera-hrs-${filaId}`);
+        const cantidad = parseFloat(inp.value) || 0;
+        const rend = parseFloat(inp.dataset.rend) || 1;
+        
+        if (cantidad > 0) {
+            let horas = cantidad / rend;
+            span.textContent = horas.toFixed(2) + 'h';
             span.style.color = '#10B981';
         } else {
             span.textContent = '--';
             span.style.color = 'var(--text-muted)';
         }
     };
-    
-    // Función para agregar línea adicional de planificación
-    window.agregarLineaPlanificacion = async () => {
-        const actividadId = document.getElementById('agregar-actividad').value;
-        const bloque = document.getElementById('agregar-bloque').value;
-        const unidades = parseFloat(document.getElementById('agregar-unidades').value);
-        const rendimiento = parseFloat(document.getElementById('agregar-rendimiento').value);
-        const observacion = document.getElementById('agregar-observacion')?.value || '';
+
+    window.fueraGuardarTodo = async () => {
+        fueraGuardarValoresActuales();
         
-        if (!actividadId || !unidades || !rendimiento) {
-            showNotification('Completa: Actividad, Unidades y Rendimiento', 'error');
+        let guardados = 0;
+        const todasLasFilas = document.querySelectorAll('#fuera-labor-input div[data-fila]');
+        const itemsToSave = [];
+        
+        for (const fila of todasLasFilas) {
+            const filaId = fila.dataset.fila;
+            const inp = fila.querySelector('.fuera-inp-cantidad');
+            const sel = fila.querySelector('.fuera-sel-bloque');
+            const cantidad = parseFloat(inp?.value) || 0;
+            const bloque = sel?.value || '';
+            
+            if (cantidad <= 0) continue;
+            
+            const rend = parseFloat(inp.dataset.rend) || 1;
+            const actId = parseInt(inp.dataset.actid);
+            const esCosechaGroup = fueraGrupoActivo === 'COSECHA';
+            
+            if (!esCosechaGroup && !bloque) {
+                showNotification('El bloque es obligatorio para todas las actividades.', 'warning');
+                return;
+            }
+            
+            let horas;
+            if (esCosechaGroup) {
+                const tallosMalla = TALLOS_POR_MALLA[fueraCultivoActivo] || 25;
+                horas = (cantidad / tallosMalla) / rend;
+            } else {
+                horas = cantidad / rend;
+            }
+            
+            itemsToSave.push({
+                actividadId: actId,
+                bloque: bloque || null,
+                unidades: cantidad,
+                rendimiento: rend,
+                horas: horas
+            });
+        }
+        
+        if (itemsToSave.length === 0) {
+            showNotification('Ingresa al menos una cantidad mayor a 0', 'warning');
             return;
         }
         
-        const horasCalc = unidades / rendimiento;
-        const actividad = actividades.find(a => a.id == actividadId);
-        const esFerti = actividad?.area?.codigo?.includes('FERTIRRIEGO');
+        const btn = document.getElementById('fuera-btn-guardar');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> GUARDANDO...'; }
         
         try {
-            const newPlan = await api.createPlanificacion({
-                semana: { id: semanaActual.id },
-                actividad: { id: parseInt(actividadId) },
-                bloque: esFerti ? null : bloque,
-                valvulas: esFerti ? bloque : null,
-                unidadesPlanificadas: unidades,
-                rendimientoUsado: rendimiento,
-                horasCalculadas: horasCalc,
-                horasAjustadas: horasCalc
-            });
-            
-            if (newPlan && newPlan.id) {
-                await api.crearPlanDiario({
-                    planificacionId: newPlan.id,
-                    fecha: fechaSeleccionada,
-                    horasAsignadas: horasCalc,
-                    unidadesAsignadas: unidades,
-                    observacion: observacion || '[ADICIONAL]'
+            for (const item of itemsToSave) {
+                const actividad = actividades.find(a => a.id == item.actividadId);
+                const esFerti = actividad?.area?.codigo?.includes('FERTIRRIEGO');
+                
+                // 1. Crear planificación semanal
+                const newPlan = await api.createPlanificacion({
+                    semana: { id: semanaActual.id },
+                    actividad: { id: item.actividadId },
+                    bloque: esFerti ? null : item.bloque,
+                    valvulas: esFerti ? item.bloque : null,
+                    unidadesPlanificadas: item.unidades,
+                    rendimientoUsado: item.rendimiento,
+                    horasCalculadas: item.horas,
+                    horasAjustadas: item.horas
                 });
+                
+                // 2. Crear asignación diaria (planificación diaria)
+                if (newPlan && newPlan.id) {
+                    await api.crearPlanDiario({
+                        planificacionId: newPlan.id,
+                        fecha: fechaSeleccionada,
+                        horasAsignadas: item.horas,
+                        unidadesAsignadas: item.unidades,
+                        observacion: '[IMPREVISTO]'
+                    });
+                }
+                guardados++;
             }
             
-            showNotification(`✓ Línea agregada y asignada al día: ${horasCalc.toFixed(2)} horas`, 'success');
-            App.navigate('ejecucion'); // Recargar vista
+            showNotification(`✓ Se agregaron y asignaron ${guardados} actividades fuera de plan.`, 'success');
+            // Recargar vista
+            App.navigate('ejecucion');
         } catch (e) {
-            showNotification('Error al agregar línea', 'error');
+            console.error(e);
+            showNotification('Error al guardar actividades fuera de plan', 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> GUARDAR ACTIVIDADES FUERA PLAN'; }
         }
     };
-    
+
     // Toggle sección agregar
     window.toggleSeccionAgregar = () => {
         const contenido = document.getElementById('agregar-contenido');
@@ -1188,55 +1389,41 @@ App.registerView('ejecucion', async () => {
                 </div>
             </div>
             
-            <!-- Sección Agregar Línea de Planificación -->
-            <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(16, 185, 129, 0.3);">
-                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleSeccionAgregar()">
-                    <h3 style="margin:0;"><i class="fa-solid fa-plus-circle" style="color:#10B981; margin-right:0.5rem;"></i> Agregar Línea de Planificación</h3>
+            <!-- NUEVO: Sección Agregar Línea Fuera de Planificación con flujo de plan semanal -->
+            <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(16, 185, 129, 0.3); padding: 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding: 1rem;" onclick="toggleSeccionAgregar()">
+                    <h3 style="margin:0;"><i class="fa-solid fa-plus-circle" style="color:#10B981; margin-right:0.5rem;"></i> Llenar Actividades Fuera de Planificación</h3>
                     <i id="agregar-toggle-icon" class="fa-solid fa-chevron-down" style="color:var(--text-muted);"></i>
                 </div>
                 
-                <div id="agregar-contenido" style="display:none; margin-top:1.5rem;">
-                    <p style="color:var(--text-muted); margin-bottom:1rem; font-size:0.9rem;"><i class="fa-solid fa-lightbulb"></i> Agrega actividades adicionales solicitadas que no estaban en la planificación original.</p>
-                    
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:1rem;">
-                        <div>
-                            <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Área</label>
-                            <select id="agregar-area" onchange="filtrarCultivosEjecucion(this.value)" style="width:100%; padding:0.6rem; border-radius:8px; background:#1E293B; border:1px solid rgba(255,255,255,0.2); color:white;">${renderAreasOptions()}</select>
-                        </div>
-                        <div>
-                            <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Cultivo (Producto)</label>
-                            <select id="agregar-cultivo" onchange="filtrarActividadesAgregar()" style="width:100%; padding:0.6rem; border-radius:8px; background:#1E293B; border:1px solid rgba(255,255,255,0.2); color:white;" disabled><option value="">Selecciona área primero</option></select>
-                        </div>
-                        <div>
-                            <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Actividad</label>
-                            <select id="agregar-actividad" onchange="actualizarBloqueAgregar(this.value)" style="width:100%; padding:0.6rem; border-radius:8px; background:#1E293B; border:1px solid rgba(255,255,255,0.2); color:white;" disabled><option value="">Selecciona cultivo primero</option></select>
-                        </div>
-                        <div id="agregar-bloque-container" style="display:none;">
-                            <label id="agregar-bloque-label" style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Bloque(s)</label>
-                            <input type="text" id="agregar-bloque" list="list-bloques" placeholder="Ej: B1, B2" style="width:100%; padding:0.6rem; border-radius:8px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white;" onfocus="this.select()">
-                        </div>
-                        <div>
-                            <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Rendimiento (unid/h)</label>
-                            <input type="number" id="agregar-rendimiento" placeholder="Auto" min="0.1" step="0.1" oninput="calcularHorasAgregar()" style="width:100%; padding:0.6rem; border-radius:8px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white;">
-                        </div>
-                        <div>
-                            <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Unidades *</label>
-                            <input type="number" id="agregar-unidades" placeholder="Ej: 30" min="0" oninput="calcularHorasAgregar()" style="width:100%; padding:0.6rem; border-radius:8px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white;">
-                        </div>
-                        <div style="display:flex; flex-direction:column; justify-content:flex-end;">
-                            <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Horas Calculadas</label>
-                            <div style="padding:0.6rem; text-align:center;"><span id="agregar-horas-preview" style="font-size:1.1rem; color:#10B981;">--</span></div>
+                <div id="agregar-contenido" style="display:none; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <!-- GRUPO TABS -->
+                    <div style="padding:0.75rem; background:rgba(0,0,0,0.2); border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:1px;">Actividad Madre</div>
+                        <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                            ${fueraGrupos.map(g => {
+                                const grupoNombre = typeof g === 'string' ? g : (g.nombre || g.codigo || String(g));
+                                const isActive = fueraGrupoActivo === grupoNombre ? 'active' : '';
+                                return `<button class="grupo-tab fuera-grupo-tab ${isActive}" data-grupo="${grupoNombre}" onclick="fueraSeleccionarGrupo('${grupoNombre}')">${grupoNombre}</button>`;
+                            }).join('')}
                         </div>
                     </div>
                     
-                    <div style="margin-top:1rem;">
-                        <label style="display:block; margin-bottom:0.5rem; font-size:0.85rem; color:var(--text-muted);">Observación (opcional)</label>
-                        <textarea id="agregar-observacion" rows="2" placeholder="Ej: Actividad solicitada adicionalmente por supervisor..." style="width:100%; padding:0.6rem; border-radius:8px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white; resize:vertical;"></textarea>
+                    <div id="fuera-contenido-labores">
+                        <div style="padding:1rem; text-align:center; color:var(--text-muted);">
+                            <i class="fa-solid fa-hand-pointer" style="font-size:1.5rem; margin-bottom:0.5rem; display:block;"></i>
+                            Selecciona una actividad madre arriba
+                        </div>
                     </div>
                     
-                    <button class="btn btn-primary" style="margin-top:1rem; width:100%;" onclick="agregarLineaPlanificacion()">
-                        <i class="fa-solid fa-plus-circle"></i> Agregar a Planificación
-                    </button>
+                    <div style="padding:0.75rem; background:rgba(0,0,0,0.2); border-top:1px solid rgba(255,255,255,0.1);">
+                        <button id="fuera-btn-guardar" onclick="fueraGuardarTodo()" 
+                            style="width:100%; padding:0.75rem; background:linear-gradient(135deg, #10B981, #059669); 
+                                   color:white; border:none; border-radius:8px; font-size:1rem; font-weight:700; cursor:pointer;
+                                   box-shadow: 0 4px 12px rgba(16,185,129,0.4); text-transform:uppercase; letter-spacing:1px;">
+                            <i class="fa-solid fa-save" style="margin-right:0.5rem;"></i> Guardar Actividades Fuera Plan
+                        </button>
+                    </div>
                 </div>
             </div>
             

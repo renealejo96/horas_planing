@@ -9,6 +9,38 @@ App.registerView('comparativa', async () => {
     let vistaActiva = 'semana'; // 'semana' o 'dia'
     
     let planificacionItems = [];
+    let rendimientosGlobales = [];
+    let productosGlobales = [];
+
+    const getProductDensity = (product) => {
+        if (!product) return 600; // default
+        if (product.densidad && product.densidad > 0) return product.densidad;
+        const nombre = (product.nombre || '').toUpperCase();
+        if (nombre.includes('GYPSOPHILA')) return 600;
+        if (nombre.includes('VERONICA')) return 600;
+        if (nombre.includes('HYPERICUM')) return 1200;
+        if (nombre.includes('SOLIDAGO')) return 600;
+        if (nombre.includes('SUNFLOWER')) return 1350;
+        return 600; // fallback
+    };
+
+    const convertToCamas = (qty, unidadCodigo, product) => {
+        const code = (unidadCodigo || '').toUpperCase();
+        if (code === 'PLANTAS_HORA' || code.includes('PLANTAS') || code.includes('SEMILLAS')) {
+            const density = getProductDensity(product);
+            return qty / density;
+        }
+        if (code === 'PINGOS_HORA' || code.includes('PINGOS')) {
+            return qty / 15;
+        }
+        return qty; // Already in Camas or other
+    };
+
+    const formatQuantity = (val) => {
+        if (val === 0) return '0';
+        if (Number.isInteger(val)) return val.toString();
+        return val.toFixed(1);
+    };
     
     window.cambiarSemanaComparativa = async (codigoAass) => {
         const encontrada = todasLasSemanas.find(s => s.codigoAass === codigoAass);
@@ -20,9 +52,11 @@ App.registerView('comparativa', async () => {
     };
     
     try {
-        [semanaActual, todasLasSemanas] = await Promise.all([
+        [semanaActual, todasLasSemanas, rendimientosGlobales, productosGlobales] = await Promise.all([
             api.getSemanaActual().catch(() => null),
-            api.getSemanasDisponibles().catch(() => [])
+            api.getSemanasDisponibles().catch(() => []),
+            api.getRendimientos().catch(() => []),
+            api.getProductos().catch(() => [])
         ]);
         
         if (!semanaSeleccionada) {
@@ -243,6 +277,20 @@ App.registerView('comparativa', async () => {
         const porcentaje = comparativaSemana.porcentajeAvanceSemana || 0;
         const color = getVariacionColor(porcentaje);
         
+        // Calcular horas por actividad madre
+        const porGrupoHoras = {};
+        planificacionItems.forEach(p => {
+            const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'GENERAL').toUpperCase();
+            const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+            if (!porGrupoHoras[grupo]) {
+                porGrupoHoras[grupo] = { plan: 0, real: 0 };
+            }
+            porGrupoHoras[grupo].plan += (p.horasAjustadas || p.horasCalculadas || 0);
+            porGrupoHoras[grupo].real += (p.horasEjecutadas || 0);
+        });
+
+        const gruposHorasOrdenados = Object.keys(porGrupoHoras).sort();
+        
         return `
             <div class="resumen-semana-card">
                 <div class="resumen-progress">
@@ -276,6 +324,42 @@ App.registerView('comparativa', async () => {
                         </div>
                     </div>
                 </div>
+                
+                <!-- NUEVO: Desglose por Actividad Madre debajo de los indicadores generales -->
+                ${gruposHorasOrdenados.length > 0 ? `
+                <div style="grid-column: 1 / -1; margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 1.5rem; width: 100%;">
+                    <h5 style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">
+                        <i class="fa-solid fa-layer-group" style="margin-right: 0.5rem; color: var(--secondary);"></i> Resumen de Horas por Actividad Madre
+                    </h5>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                        ${gruposHorasOrdenados.map(grupo => {
+                            const data = porGrupoHoras[grupo];
+                            const pct = data.plan > 0 ? (data.real / data.plan) * 100 : 0;
+                            const rest = Math.max(0, data.plan - data.real);
+                            return `
+                                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 0.75rem 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                    <div style="font-weight: 700; color: white; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.25rem; display: flex; justify-content: space-between;">
+                                        <span>${grupo}</span>
+                                        <span style="color: ${getVariacionColor(pct)};">${pct.toFixed(0)}%</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">
+                                        <span>Planificadas:</span>
+                                        <span style="color: white; font-weight: 600;">${data.plan.toFixed(1)}h</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">
+                                        <span>Ejecutadas:</span>
+                                        <span style="color: white; font-weight: 600;">${data.real.toFixed(1)}h</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+                                        <span>Restantes:</span>
+                                        <span style="color: ${rest > 0 ? '#F59E0B' : '#10B981'}; font-weight: 600;">${rest.toFixed(1)}h</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                ` : ''}
             </div>
         `;
     };
@@ -298,6 +382,7 @@ App.registerView('comparativa', async () => {
 
         return gruposOrdenados.map(grupo => {
             const items = porGrupo[grupo];
+            const unitName = grupo === 'COSECHA' ? 'U.' : 'Camas';
             
             // Ordenar items por cultivo y luego actividad
             items.sort((a, b) => {
@@ -307,9 +392,25 @@ App.registerView('comparativa', async () => {
                 return (a.actividad?.nombre || '').localeCompare(b.actividad?.nombre || '');
             });
 
-            // Totales de grupo
-            const totUPlan = items.reduce((s, p) => s + (p.unidadesPlanificadas || 0), 0);
-            const totUReal = items.reduce((s, p) => s + (p.unidadesEjecutadas || 0), 0);
+            // Totales de grupo en Camas o Unidades (según corresponda)
+            let totUPlan = 0;
+            let totUReal = 0;
+            
+            items.forEach(p => {
+                let uPlan = p.unidadesPlanificadas || 0;
+                let uReal = p.unidadesEjecutadas || 0;
+                
+                if (grupo !== 'COSECHA') {
+                    const rend = rendimientosGlobales.find(r => r.actividad?.id === p.actividad?.id && (!p.actividad?.producto || r.producto?.id === p.actividad?.producto?.id));
+                    const unidadCodigo = rend?.unidad?.codigo || 'CAMAS_HORA';
+                    uPlan = convertToCamas(uPlan, unidadCodigo, p.actividad?.producto);
+                    uReal = convertToCamas(uReal, unidadCodigo, p.actividad?.producto);
+                }
+                
+                totUPlan += uPlan;
+                totUReal += uReal;
+            });
+            
             const pctUCumpl = totUPlan > 0 ? (totUReal / totUPlan) * 100 : 0;
             
             const totHPlan = items.reduce((s, p) => s + (p.horasAjustadas || p.horasCalculadas || 0), 0);
@@ -346,18 +447,26 @@ App.registerView('comparativa', async () => {
                                 <tr>
                                     <th style="padding:0.75rem 1rem;">Actividad / Variedad</th>
                                     <th style="padding:0.75rem; text-align:center;">Bloque</th>
-                                    <th style="padding:0.75rem; text-align:right;">U. Planificadas</th>
-                                    <th style="padding:0.75rem; text-align:right;">U. Ejecutadas</th>
-                                    <th style="padding:0.75rem; text-align:center;">% Cumpl.</th>
+                                    <th style="padding:0.75rem; text-align:right;">${unitName} Planificadas</th>
+                                    <th style="padding:0.75rem; text-align:right;">${unitName} Ejecutadas</th>
                                     <th style="padding:0.75rem; text-align:right;">Horas Plan</th>
                                     <th style="padding:0.75rem; text-align:right;">Horas Real</th>
                                     <th style="padding:0.75rem; text-align:center;">Tiempo Ganado</th>
+                                    <th style="padding:0.75rem; text-align:center;">% Cumpl.</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${items.map(p => {
-                                    const uPlan = p.unidadesPlanificadas || 0;
-                                    const uReal = p.unidadesEjecutadas || 0;
+                                    let uPlan = p.unidadesPlanificadas || 0;
+                                    let uReal = p.unidadesEjecutadas || 0;
+                                    
+                                    if (grupo !== 'COSECHA') {
+                                        const rend = rendimientosGlobales.find(r => r.actividad?.id === p.actividad?.id && (!p.actividad?.producto || r.producto?.id === p.actividad?.producto?.id));
+                                        const unidadCodigo = rend?.unidad?.codigo || 'CAMAS_HORA';
+                                        uPlan = convertToCamas(uPlan, unidadCodigo, p.actividad?.producto);
+                                        uReal = convertToCamas(uReal, unidadCodigo, p.actividad?.producto);
+                                    }
+                                    
                                     const pct = uPlan > 0 ? (uReal / uPlan) * 100 : 0;
                                     const colorPct = pct >= 100 ? '#10B981' : pct >= 80 ? '#F59E0B' : pct >= 50 ? '#3B82F6' : '#94A3B8';
                                     
@@ -375,13 +484,8 @@ App.registerView('comparativa', async () => {
                                                 <small style="color:var(--text-muted); font-size:0.75rem;">${cultivo}</small>
                                             </td>
                                             <td style="padding:0.7rem; text-align:center; color:white;">${p.bloque || p.valvulas || '-'}</td>
-                                            <td style="padding:0.7rem; text-align:right;">${uPlan.toLocaleString()}</td>
-                                            <td style="padding:0.7rem; text-align:right; font-weight:600; color:${uReal > 0 ? 'white' : 'var(--text-muted)'};">${uReal.toLocaleString()}</td>
-                                            <td style="padding:0.7rem; text-align:center;">
-                                                <span class="badge" style="background:rgba(${uPlan > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.15); color:${uPlan > 0 ? colorPct : '#94A3B8'}; font-weight:bold; border:1px solid rgba(${uPlan > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.3);">
-                                                    ${uPlan > 0 ? `${pct.toFixed(0)}%` : '--'}
-                                                </span>
-                                            </td>
+                                            <td style="padding:0.7rem; text-align:right;">${formatQuantity(uPlan)}</td>
+                                            <td style="padding:0.7rem; text-align:right; font-weight:600; color:${uReal > 0 ? 'white' : 'var(--text-muted)'};">${formatQuantity(uReal)}</td>
                                             <td style="padding:0.7rem; text-align:right;">${hPlan.toFixed(1)}h</td>
                                             <td style="padding:0.7rem; text-align:right;">${hReal.toFixed(1)}h</td>
                                             <td style="padding:0.7rem; text-align:center;">
@@ -391,6 +495,11 @@ App.registerView('comparativa', async () => {
                                                     </span>
                                                 ` : `<span style="color:var(--text-muted); font-size:0.75rem;">Sin ejecutar</span>`}
                                             </td>
+                                            <td style="padding:0.7rem; text-align:center;">
+                                                <span class="badge" style="background:rgba(${uPlan > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.15); color:${uPlan > 0 ? colorPct : '#94A3B8'}; font-weight:bold; border:1px solid rgba(${uPlan > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.3);">
+                                                    ${uPlan > 0 ? `${pct.toFixed(0)}%` : '--'}
+                                                </span>
+                                            </td>
                                         </tr>
                                     `;
                                 }).join('')}
@@ -398,18 +507,18 @@ App.registerView('comparativa', async () => {
                             <tfoot style="background:rgba(0,0,0,0.3); border-top:1px solid rgba(255,255,255,0.08); font-weight:bold;">
                                 <tr>
                                     <td colspan="2" style="padding:0.75rem 1rem;">TOTAL ${grupo}</td>
-                                    <td style="padding:0.75rem; text-align:right;">${totUPlan.toLocaleString()}</td>
-                                    <td style="padding:0.75rem; text-align:right;">${totUReal.toLocaleString()}</td>
-                                    <td style="padding:0.75rem; text-align:center;">
-                                        <span style="color:${pctUCumpl >= 100 ? '#10B981' : pctUCumpl >= 80 ? '#F59E0B' : '#94A3B8'}; font-weight:bold;">
-                                            ${totUPlan > 0 ? `${pctUCumpl.toFixed(0)}%` : '--'}
-                                        </span>
-                                    </td>
+                                    <td style="padding:0.75rem; text-align:right;">${formatQuantity(totUPlan)}</td>
+                                    <td style="padding:0.75rem; text-align:right;">${formatQuantity(totUReal)}</td>
                                     <td style="padding:0.75rem; text-align:right;">${totHPlan.toFixed(1)}h</td>
                                     <td style="padding:0.75rem; text-align:right;">${totHReal.toFixed(1)}h</td>
                                     <td style="padding:0.75rem; text-align:center;">
                                         <span class="badge" style="background:${difHoras >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; color:${difHoras >= 0 ? '#10B981' : '#EF4444'}; font-weight:bold; font-size:0.85rem;">
                                             ${difHoras >= 0 ? `+${difHoras.toFixed(1)}h ganados` : `${difHoras.toFixed(1)}h desviación`}
+                                        </span>
+                                    </td>
+                                    <td style="padding:0.75rem; text-align:center;">
+                                        <span style="color:${pctUCumpl >= 100 ? '#10B981' : pctUCumpl >= 80 ? '#F59E0B' : '#94A3B8'}; font-weight:bold;">
+                                            ${totUPlan > 0 ? `${pctUCumpl.toFixed(0)}%` : '--'}
                                         </span>
                                     </td>
                                 </tr>

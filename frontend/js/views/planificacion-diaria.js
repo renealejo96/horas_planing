@@ -10,6 +10,7 @@ App.registerView('planificacion-diaria', async () => {
     let planDiarioPorPlan = {}; // Mapeo rápido de id_planificacion -> objeto_plan_diario
     let grupoActivo = null;
     let gruposUnicos = [];
+    let cultivoActivoDiario = null;
     
     const getLocalIsoDate = (dOb) => {
         const y = dOb.getFullYear();
@@ -56,6 +57,23 @@ App.registerView('planificacion-diaria', async () => {
                 api.getPlanDiarioSemana(semanaSeleccionada.codigoAass).catch(() => [])
             ]);
             
+            // Filtrar por permisos de usuario
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (user.rol !== 'ADMIN') {
+                const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
+                planificacionItems = planificacionItems.filter(p => {
+                    const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'GENERAL').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return permitidas.includes(grupo);
+                });
+                planificacionDiaria = planificacionDiaria.filter(pd => {
+                    if (!pd.planificacion) return false;
+                    const rawName = (pd.planificacion.actividad?.laborMadre || pd.planificacion.actividad?.grupo || pd.planificacion.actividad?.nombre || 'GENERAL').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return permitidas.includes(grupo);
+                });
+            }
+            
             // Mapeo rápido para verificar asignaciones ya hechas
             planDiarioPorPlan = {};
             planificacionDiaria.forEach(pd => {
@@ -85,6 +103,12 @@ App.registerView('planificacion-diaria', async () => {
             if (gruposUnicos.length > 0 && (!grupoActivo || !gruposUnicos.includes(grupoActivo))) {
                 grupoActivo = gruposUnicos.includes('COSECHA') ? 'COSECHA' : gruposUnicos[0];
             }
+
+            // Iniciar cultivo activo diario
+            if (grupoActivo) {
+                const cultivos = getCultivosDelGrupo();
+                cultivoActivoDiario = cultivos.length > 0 ? cultivos[0].codigo : null;
+            }
         }
     } catch (e) {
         console.log('Error cargando planificación diaria:', e);
@@ -99,6 +123,12 @@ App.registerView('planificacion-diaria', async () => {
     // Función para cambiar el grupo sin recargar todo
     window.seleccionarGrupoDiario = (grupo) => {
         grupoActivo = grupo;
+        const cultivos = getCultivosDelGrupo();
+        cultivoActivoDiario = cultivos.length > 0 ? cultivos[0].codigo : null;
+        
+        const cultCont = document.getElementById('cultivos-diarios-container');
+        if (cultCont) cultCont.innerHTML = renderCultivoTabsDiario();
+        
         document.getElementById('grid-container-diario').innerHTML = renderPlanificacionParaAsignar();
         document.querySelectorAll('.grupo-tab-diario').forEach(t => {
             if (t.dataset.grupo === grupo) {
@@ -292,6 +322,58 @@ App.registerView('planificacion-diaria', async () => {
         }
     };
     
+    const getCultivosDelGrupo = () => {
+        // Filtrar por grupo y excluir asignados para hoy
+        const itemsGrupo = planificacionItems.filter(p => p.grupoCalculado === grupoActivo && !planDiarioPorPlan[p.id]);
+        const cultivosMap = new Map();
+        itemsGrupo.forEach(p => {
+            const pdcto = p.producto || p.actividad?.producto;
+            if (pdcto) {
+                cultivosMap.set(pdcto.codigo, pdcto.nombre);
+            } else {
+                cultivosMap.set('GENERAL', 'General');
+            }
+        });
+        return Array.from(cultivosMap.entries()).map(([codigo, nombre]) => ({ codigo, nombre }));
+    };
+
+    const renderCultivoTabsDiario = () => {
+        const cultivos = getCultivosDelGrupo();
+        if (!cultivos.length) return '<div style="color:var(--text-muted); font-size:0.8rem; padding: 0.5rem 0;">Sin cultivos con planificación pendiente</div>';
+        
+        if (cultivoActivoDiario && !cultivos.some(c => c.codigo === cultivoActivoDiario)) {
+            cultivoActivoDiario = cultivos[0].codigo;
+        } else if (!cultivoActivoDiario) {
+            cultivoActivoDiario = cultivos[0].codigo;
+        }
+        
+        return `
+            <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:1px; margin-top: 0.5rem;">Filtrar por Cultivo</div>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                ${cultivos.map(c => {
+                    const isActive = cultivoActivoDiario === c.codigo ? 'active' : '';
+                    return `
+                        <button class="cultivo-card cultivo-tab-diario ${isActive}" data-cultivo="${c.codigo}" onclick="seleccionarCultivoDiario('${c.codigo}')">
+                            ${c.nombre}
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    };
+
+    window.seleccionarCultivoDiario = (cultivo) => {
+        cultivoActivoDiario = cultivo;
+        document.getElementById('grid-container-diario').innerHTML = renderPlanificacionParaAsignar();
+        document.querySelectorAll('.cultivo-tab-diario').forEach(btn => {
+            if (btn.dataset.cultivo === cultivo) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    };
+
     const renderGrupoTabs = () => {
         if (!gruposUnicos.length) return '<span style="color:var(--text-muted);">Sin planificaciones en la semana</span>';
         return gruposUnicos.map(g => {
@@ -325,22 +407,46 @@ App.registerView('planificacion-diaria', async () => {
             }
         };
 
-        // 1. Filtrar por GRUPO ACTIVO (el seleccionado en los tabs celestes, e.g. laborMadre) y excluir ya asignadas
-        const itemsGrupo = planificacionItems.filter(p => p.grupoCalculado === grupoActivo && !planDiarioPorPlan[p.id]);
+        // 1. Filtrar por GRUPO ACTIVO y CULTIVO ACTIVO y excluir ya asignadas para hoy
+        const itemsGrupo = planificacionItems.filter(p => {
+            const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
+            return p.grupoCalculado === grupoActivo && !planDiarioPorPlan[p.id] && pCultivo === cultivoActivoDiario;
+        });
+
+        // Filtrar solo los que tengan disponible > 0
+        const itemsGrupoFiltrados = itemsGrupo.filter(p => {
+            const isCosecha = grupoActivo === 'COSECHA';
+            const productoCodigo = p.actividad?.producto?.codigo;
+            const tallosMalla = p.actividad?.producto?.tallosPorMalla || TALLOS_POR_MALLA[productoCodigo] || 25;
+            const rendOriginal = p.rendimientoUsado || 1;
+            
+            const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
+            const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+
+            // Calcular asignaciones en otros días
+            const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
+                const pid = pd.planificacionId || pd.planificacion?.id;
+                return pid === p.id && pd.fecha !== fechaSeleccionada;
+            });
+            const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+            const unidadesDisponiblesDia = unidadesSemanales - unidadesOtrosDias;
+            
+            return unidadesDisponiblesDia > 0;
+        });
         
-        if (itemsGrupo.length === 0) {
+        if (itemsGrupoFiltrados.length === 0) {
             return `
                 <div style="text-align:center; padding:2rem; color:var(--text-muted);">
                     <i class="fa-solid fa-check-circle" style="font-size:2.5rem; margin-bottom:0.5rem; color:#10B981; opacity:0.8;"></i>
                     <p style="font-size:1rem; font-weight:600; color:white;">¡Completado!</p>
-                    <p style="font-size:0.85rem;">Todas las actividades de la categoría <strong>${grupoActivo}</strong> han sido asignadas para hoy.</p>
+                    <p style="font-size:0.85rem;">Todas las actividades de esta categoría y cultivo han sido asignadas o completadas.</p>
                 </div>
             `;
         }
 
         // 2. Agrupar por nombre de ACTIVIDAD específica
         const porActividad = {};
-        itemsGrupo.forEach(p => {
+        itemsGrupoFiltrados.forEach(p => {
             const actKey = p.actividad?.nombre || 'GENERAL';
             if (!porActividad[actKey]) porActividad[actKey] = [];
             porActividad[actKey].push(p);
@@ -1109,8 +1215,11 @@ App.registerView('planificacion-diaria', async () => {
                 <!-- GRUPO TABS -->
                 <div style="padding:0.75rem; background:rgba(0,0,0,0.2); border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:1rem; border-radius:8px;">
                     <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:1px;">Filtro de Actividad Madre</div>
-                    <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.75rem;">
                         ${renderGrupoTabs()}
+                    </div>
+                    <div id="cultivos-diarios-container">
+                        ${renderCultivoTabsDiario()}
                     </div>
                 </div>
                 
@@ -1120,32 +1229,6 @@ App.registerView('planificacion-diaria', async () => {
                 </div>
             </div>
             ` : ''}
-            
-            <!-- NUEVO: Sección Agregar Línea Fuera de Planificación -->
-            <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(59, 130, 246, 0.3);">
-                <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleSeccionAgregarDiario()">
-                    <h3 style="margin:0;"><i class="fa-solid fa-plus-circle" style="color:#3B82F6; margin-right:0.5rem;"></i> Agregar Actividades Fuera de Planificación</h3>
-                    <i id="diario-agregar-toggle-icon" class="fa-solid fa-chevron-down" style="color:var(--text-muted);"></i>
-                </div>
-                
-                <div id="diario-agregar-contenido" style="display:none; margin-top:1.5rem;">
-                    <p style="color:var(--text-muted); margin-bottom:1.5rem; font-size:0.9rem;"><i class="fa-solid fa-lightbulb"></i> Agrega una o más actividades imprevistas para hoy. Se crearán en la planificación semanal y se asignarán automáticamente a este día.</p>
-                    
-                    <!-- Lista de Actividades Adicionales -->
-                    <div id="diario-agregar-actividades-lista">
-                        <!-- Se insertan aquí dinámicamente -->
-                    </div>
-                    
-                    <button type="button" class="btn btn-outline" onclick="agregarFilaActividadFueraPlan()" style="margin-top:1rem; width:100%; border:1px dashed var(--primary); color:var(--primary); font-weight:bold; display:flex; align-items:center; justify-content:center; gap:0.5rem; height:44px; border-radius:8px; cursor:pointer;">
-                        <i class="fa-solid fa-plus"></i> + Agregar Otra Actividad
-                    </button>
-                    
-                    <button class="btn" onclick="agregarLineaDiarioFueraPlan()" 
-                            style="margin-top:2rem; width:100%; height:52px; background:linear-gradient(135deg, #10B981, #059669); border:none; box-shadow:0 4px 15px rgba(16, 185, 129, 0.4); font-size:1.15rem; font-weight:800; letter-spacing:0.5px; color:white; border-radius:10px; cursor:pointer; text-transform:uppercase; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
-                        <i class="fa-solid fa-floppy-disk"></i> GUARDAR TODAS LAS ACTIVIDADES FUERA PLAN
-                    </button>
-                </div>
-            </div>
             
             <!-- Asignaciones Realizadas -->
             ${renderAsignacionesRealizadas()}
@@ -1195,9 +1278,4 @@ App.registerView('planificacion-diaria', async () => {
     };
 
     setTimeout(configurarNavegacionTecladoDiario, 100);
-    setTimeout(() => {
-        if (typeof window.agregarFilaActividadFueraPlan === 'function') {
-            window.agregarFilaActividadFueraPlan();
-        }
-    }, 150);
 });

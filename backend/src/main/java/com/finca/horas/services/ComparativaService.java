@@ -156,7 +156,12 @@ public class ComparativaService {
         List<ComparativaDiaItem> items = planDiarias.stream()
             .map(pd -> {
                 Long planId = pd.getPlanificacion().getId();
-                String actividad = pd.getPlanificacion().getActividad().getNombre();
+                Actividad actObj = pd.getPlanificacion().getActividad();
+                Producto prodObj = actObj.getProducto();
+                String actividad = actObj.getNombre();
+                if (prodObj != null) {
+                    actividad = prodObj.getNombre() + " - " + actividad;
+                }
                 String bloque = pd.getPlanificacion().getBloque();
                 Double horasPlan = pd.getHorasAsignadas();
                 Double horasEjec = horasEjecPorPlan.getOrDefault(planId, 0.0);
@@ -174,7 +179,13 @@ public class ComparativaService {
             .collect(Collectors.groupingBy(e -> e.getPlanificacion().getId()))
             .forEach((planId, ejecs) -> {
                 EjecucionActividad primera = ejecs.get(0);
-                String actividad = primera.getPlanificacion().getActividad().getNombre() + " [SIN PLAN DIARIO]";
+                Actividad actObj = primera.getPlanificacion().getActividad();
+                Producto prodObj = actObj.getProducto();
+                String actividad = actObj.getNombre();
+                if (prodObj != null) {
+                    actividad = prodObj.getNombre() + " - " + actividad;
+                }
+                actividad += " [SIN PLAN DIARIO]";
                 String bloque = primera.getPlanificacion().getBloque();
                 Double horasEjec = ejecs.stream().mapToDouble(e -> e.getHorasReales() != null ? e.getHorasReales() : 0.0).sum();
                 items.add(new ComparativaDiaItem(planId, actividad, bloque, 0.0, horasEjec));
