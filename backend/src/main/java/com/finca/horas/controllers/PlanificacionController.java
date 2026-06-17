@@ -167,6 +167,41 @@ public class PlanificacionController {
         return ResponseEntity.notFound().build();
     }
 
+    @PostMapping("/semanas/{codigoOrigen}/copiar-a/{codigoDestino}")
+    public ResponseEntity<?> copiarPlanificacion(
+            HttpServletRequest request,
+            @PathVariable String codigoOrigen,
+            @PathVariable String codigoDestino) {
+            
+        String rol = (String) request.getAttribute("rol");
+        if (rol == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "Acceso denegado: Rol no identificado"));
+        }
+        
+        List<String> permitidas = new java.util.ArrayList<>();
+        boolean esAdmin = "ADMIN".equals(rol);
+        if (!esAdmin) {
+            String permitidasStr = (String) request.getAttribute("actividadesPermitidas");
+            if (permitidasStr != null && !permitidasStr.trim().isEmpty()) {
+                permitidas = java.util.Arrays.stream(permitidasStr.split(","))
+                    .map(String::trim)
+                    .map(String::toUpperCase)
+                    .toList();
+            }
+        }
+        
+        try {
+            List<PlanificacionActividad> copias = planificacionService.copiarPlanificacion(codigoOrigen, codigoDestino, permitidas, esAdmin);
+            return ResponseEntity.ok(Map.of(
+                "mensaje", "Se copiaron " + copias.size() + " actividades a la semana " + codigoDestino,
+                "cantidad", copias.size()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // Helpers de validación de permisos
     private boolean esActividadPermitida(Long actividadId, HttpServletRequest request) {
         String rol = (String) request.getAttribute("rol");

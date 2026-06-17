@@ -80,6 +80,7 @@ const api = {
     createPlanificacion: (data) => api.request('/planificacion/actividades', 'POST', data),
     updatePlanificacion: (id, data) => api.request(`/planificacion/actividades/${id}`, 'PUT', data),
     deletePlanificacion: (id) => api.request(`/planificacion/actividades/${id}`, 'DELETE'),
+    copiarPlanificacionSemana: (codigoOrigen, codigoDestino) => api.request(`/planificacion/semanas/${codigoOrigen}/copiar-a/${codigoDestino}`, 'POST'),
     
     // ========== Planificación Diaria ==========
     getPlanDiarioFecha: (fecha) => api.request(`/planificacion-diaria/${fecha}`),

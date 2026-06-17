@@ -299,4 +299,57 @@ public class PlanificacionService {
             }
         }
     }
+
+    @Transactional
+    public List<PlanificacionActividad> copiarPlanificacion(String codigoOrigen, String codigoDestino, List<String> actividadesPermitidas, boolean esAdmin) {
+        Semana semanaDestino = semanaRepo.findByCodigoAass(codigoDestino)
+            .orElseThrow(() -> new RuntimeException("Semana destino no encontrada: " + codigoDestino));
+            
+        if (Boolean.TRUE.equals(semanaDestino.getPlanificacionCerrada())) {
+            throw new RuntimeException("La planificación de la semana destino está cerrada.");
+        }
+        
+        List<PlanificacionActividad> sourceItems = planificacionRepo.findByCodigoSemana(codigoOrigen);
+        List<PlanificacionActividad> destItems = planificacionRepo.findByCodigoSemana(codigoDestino);
+        
+        List<PlanificacionActividad> clonedItems = new java.util.ArrayList<>();
+        
+        for (PlanificacionActividad src : sourceItems) {
+            if (src.getActividad() == null) continue;
+            
+            // Si no es admin, validar que la actividad esté permitida
+            if (!esAdmin) {
+                String laborMadre = src.getActividad().getLaborMadre();
+                if (laborMadre == null || !actividadesPermitidas.contains(laborMadre.toUpperCase())) {
+                    continue;
+                }
+            }
+            
+            // Verificar si ya existe un item equivalente en la semana de destino
+            boolean existe = destItems.stream().anyMatch(dst -> 
+                dst.getActividad() != null && src.getActividad() != null &&
+                dst.getActividad().getId().equals(src.getActividad().getId()) &&
+                java.util.Objects.equals(dst.getBloque(), src.getBloque()) &&
+                java.util.Objects.equals(dst.getValvulas(), src.getValvulas())
+            );
+            
+            if (!existe) {
+                PlanificacionActividad nuevo = new PlanificacionActividad();
+                nuevo.setSemana(semanaDestino);
+                nuevo.setActividad(src.getActividad());
+                nuevo.setBloque(src.getBloque());
+                nuevo.setValvulas(src.getValvulas());
+                nuevo.setUnidadesPlanificadas(src.getUnidadesPlanificadas());
+                nuevo.setRendimientoUsado(src.getRendimientoUsado());
+                nuevo.setHorasCalculadas(src.getHorasCalculadas());
+                nuevo.setHorasAjustadas(src.getHorasAjustadas());
+                nuevo.setHorasEjecutadas(0.0);
+                nuevo.setUnidadesEjecutadas(0.0);
+                
+                clonedItems.add(planificacionRepo.save(nuevo));
+            }
+        }
+        
+        return clonedItems;
+    }
 }

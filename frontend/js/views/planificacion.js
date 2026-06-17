@@ -116,7 +116,7 @@ App.registerView('planificacion', async () => {
         const semanas = semanasDisponibles.length ? semanasDisponibles : (semanaActual ? [semanaActual] : []);
         if (!semanas.length) return `<span style="color:#93C5FD; font-weight:600;">${semanaSeleccionada ? semanaSeleccionada.codigoAass : 'Sin semana'}</span>`;
         return `
-            <select onchange="cambiarSemana(this.value)" 
+            <select id="semana-selector-plan" onchange="cambiarSemana(this.value)" 
                 style="padding:0.4rem 0.8rem; background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.4); 
                        border-radius:8px; cursor:pointer; font-size:0.85rem; font-weight:600; outline:none;">
                 ${semanas.map(s => {
@@ -679,6 +679,10 @@ App.registerView('planificacion', async () => {
         const semanaEncontrada = todasLasSemanas.find(s => s.codigoAass === codigoAass);
         if (!semanaEncontrada) return;
         semanaSeleccionada = semanaEncontrada;
+        
+        const selEl = document.getElementById('semana-selector-plan');
+        if (selEl) selEl.value = codigoAass;
+        
         grupoActivo = null;
         cultivoActivo = null;
         laborActiva = null;
@@ -702,6 +706,41 @@ App.registerView('planificacion', async () => {
         document.getElementById('tabla-plan').innerHTML = renderPlanificacion();
         actualizarContadores();
         document.getElementById('plan-grupo-label').textContent = '';
+    };
+
+    window.llenarPlanSemanaSiguiente = async () => {
+        if (!semanaActual || !semanaSiguiente) {
+            showNotification('No se puede copiar: la semana actual o siguiente no están definidas', 'error');
+            return;
+        }
+        
+        if (!confirm(`¿Deseas copiar todas las actividades planificadas de la semana actual (${semanaActual.codigoAass}) a la semana siguiente (${semanaSiguiente.codigoAass})?`)) {
+            return;
+        }
+        
+        const btn = document.getElementById('btn-llenar-siguiente');
+        let originalHtml = '';
+        if (btn) {
+            originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Copiando...';
+        }
+        
+        try {
+            const res = await api.copiarPlanificacionSemana(semanaActual.codigoAass, semanaSiguiente.codigoAass);
+            showNotification(res.mensaje || 'Planificación copiada con éxito', 'success');
+            
+            // Cambiar a la semana siguiente para visualizar los cambios
+            await window.cambiarSemana(semanaSiguiente.codigoAass);
+        } catch (e) {
+            console.error(e);
+            showNotification(e.message || 'Error al copiar la planificación', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
     };
 
     window.seleccionarGrupo = async (grupo) => {
@@ -1173,6 +1212,13 @@ App.registerView('planificacion', async () => {
                     ${semanaActual && semanaSeleccionada && semanaActual.codigoAass === semanaSeleccionada.codigoAass
                         ? '<span style="background:rgba(16,185,129,0.15); color:#10B981; border:1px solid rgba(16,185,129,0.4); border-radius:6px; padding:0.2rem 0.5rem; font-size:0.7rem; font-weight:600;">ACTUAL</span>'
                         : ''}
+                    ${semanaActual && semanaSiguiente ? `
+                        <button id="btn-llenar-siguiente" onclick="llenarPlanSemanaSiguiente()" 
+                            style="padding:0.4rem 0.8rem; background:rgba(245,158,11,0.15); color:#F59E0B; border:1px solid rgba(245,158,11,0.4); 
+                                   border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:600; outline:none; display:flex; align-items:center; gap:0.3rem;">
+                            <i class="fa-solid fa-copy"></i> Llenar Plan Siguiente (${semanaSiguiente.codigoAass})
+                        </button>
+                    ` : ''}
                 </div>
                 <div style="display:flex; gap:1rem; align-items:center;">
                     <span style="color:#F59E0B; font-weight:600; font-size:0.9rem;">
