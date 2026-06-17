@@ -188,8 +188,18 @@ App.registerView('planificacion-diaria', async () => {
                 const pid = pd.planificacionId || pd.planificacion?.id;
                 return pid === planificacionId && pd.fecha !== fechaSeleccionada;
             });
-            const horasOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
-            const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+            let horasOtrosDias = 0;
+            let unidadesOtrosDias = 0;
+            asignacionesOtrosDias.forEach(pd => {
+                const ejecsDia = ejecucionesSemana.filter(e => e.planificacion?.id === planificacionId && e.fecha === pd.fecha);
+                if (ejecsDia.length > 0) {
+                    horasOtrosDias += ejecsDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                    unidadesOtrosDias += ejecsDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                } else {
+                    horasOtrosDias += pd.horasAsignadas || 0;
+                    unidadesOtrosDias += pd.unidadesAsignadas || 0;
+                }
+            });
 
             if ((horasOtrosDias + horasAsignadas) > (horasSemanales + 0.05) || (unidadesOtrosDias + unidadesAsignadas) > (unidadesSemanales + 0.05)) {
                 superoPlan = true;
@@ -259,8 +269,18 @@ App.registerView('planificacion-diaria', async () => {
                     const pid = pd.planificacionId || pd.planificacion?.id;
                     return pid === p.id && pd.fecha !== fechaSeleccionada;
                 });
-                const horasOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
-                const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+                let horasOtrosDias = 0;
+                let unidadesOtrosDias = 0;
+                asignacionesOtrosDias.forEach(pd => {
+                    const ejecsDia = ejecucionesSemana.filter(e => e.planificacion?.id === p.id && e.fecha === pd.fecha);
+                    if (ejecsDia.length > 0) {
+                        horasOtrosDias += ejecsDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                        unidadesOtrosDias += ejecsDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                    } else {
+                        horasOtrosDias += pd.horasAsignadas || 0;
+                        unidadesOtrosDias += pd.unidadesAsignadas || 0;
+                    }
+                });
 
                 if ((horasOtrosDias + horasAsignadas) > (horasSemanales + 0.05) || (unidadesOtrosDias + unidadesAsignadas) > (unidadesSemanales + 0.05)) {
                     superoPlan = true;
@@ -423,15 +443,23 @@ App.registerView('planificacion-diaria', async () => {
             const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
             const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
 
-            // Calcular asignaciones en otros días
+            // Calcular asignaciones en otros días considerando ejecuciones reales
             const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
                 const pid = pd.planificacionId || pd.planificacion?.id;
                 return pid === p.id && pd.fecha !== fechaSeleccionada;
             });
-            const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+            let unidadesOtrosDias = 0;
+            asignacionesOtrosDias.forEach(pd => {
+                const ejecsDia = ejecucionesSemana.filter(e => e.planificacion?.id === p.id && e.fecha === pd.fecha);
+                if (ejecsDia.length > 0) {
+                    unidadesOtrosDias += ejecsDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                } else {
+                    unidadesOtrosDias += pd.unidadesAsignadas || 0;
+                }
+            });
             const unidadesDisponiblesDia = unidadesSemanales - unidadesOtrosDias;
             
-            return unidadesDisponiblesDia > 0;
+            return unidadesDisponiblesDia > 0.01;
         });
         
         if (itemsGrupoFiltrados.length === 0) {
@@ -523,13 +551,23 @@ App.registerView('planificacion-diaria', async () => {
                                     const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
                                     const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
 
-                                    // Calcular asignaciones previas de la misma semana (días anteriores)
-                                    const asignacionesPrevias = allPlanificacionDiariaSemana.filter(pd => {
+                                    // Calcular asignaciones/ejecuciones consumidas en otros días de la semana
+                                    const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
                                         const pid = pd.planificacionId || pd.planificacion?.id;
-                                        return pid === p.id && pd.fecha < fechaSeleccionada;
+                                        return pid === p.id && pd.fecha !== fechaSeleccionada;
                                     });
-                                    const horasAsignadasPrevias = asignacionesPrevias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
-                                    const unidadesAsignadasPrevias = asignacionesPrevias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
+                                    let horasAsignadasPrevias = 0;
+                                    let unidadesAsignadasPrevias = 0;
+                                    asignacionesOtrosDias.forEach(pd => {
+                                        const ejecsDia = ejecucionesSemana.filter(e => e.planificacion?.id === p.id && e.fecha === pd.fecha);
+                                        if (ejecsDia.length > 0) {
+                                            horasAsignadasPrevias += ejecsDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                                            unidadesAsignadasPrevias += ejecsDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                                        } else {
+                                            horasAsignadasPrevias += pd.horasAsignadas || 0;
+                                            unidadesAsignadasPrevias += pd.unidadesAsignadas || 0;
+                                        }
+                                    });
 
                                     const horasDisponiblesDia = horasSemanales - horasAsignadasPrevias;
                                     const unidadesDisponiblesDia = unidadesSemanales - unidadesAsignadasPrevias;
