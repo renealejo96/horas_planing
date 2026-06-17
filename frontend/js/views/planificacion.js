@@ -36,15 +36,8 @@ App.registerView('planificacion', async () => {
             });
         }
 
-        // A partir del miércoles, predeterminar la semana siguiente para evitar errores de llenado
-        const hoy = new Date();
-        const diaSemana = hoy.getDay(); // 0 = Domingo, 3 = Miércoles, 4 = Jueves, etc.
-        const esMiercolesODespues = (diaSemana === 0 || diaSemana >= 3);
-        if (esMiercolesODespues && semanaSiguiente) {
-            semanaSeleccionada = semanaSiguiente;
-        } else {
-            semanaSeleccionada = semanaActual || semanaSiguiente;
-        }
+        // Predeterminar siempre la semana actual por solicitud del usuario
+        semanaSeleccionada = semanaActual || semanaSiguiente;
         if (semanaSeleccionada) {
             planificacionItems = await api.getPlanificacionSemana(semanaSeleccionada.codigoAass).catch(() => []);
             

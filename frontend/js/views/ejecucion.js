@@ -355,8 +355,15 @@ App.registerView('ejecucion', async () => {
         const elementosParaMostrar = planDiarioArr.filter(pd => {
             const p = pd.planificacion;
             if (!p || p.grupoCalculado !== grupoActivo) return false;
-            const hasEjec = ejecuciones.some(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            return !hasEjec;
+            
+            const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
+            if (pCultivo !== cultivoActivoDiario) return false;
+            
+            const horasPlanDia = pd.horasAsignadas || 0;
+            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
+            const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+            const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
+            return !completado;
         });
 
         const promesas = [];
@@ -1017,9 +1024,12 @@ App.registerView('ejecucion', async () => {
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
             if (pCultivo !== cultivoActivoDiario) return false;
             
-            // Si ya hay alguna ejecución registrada para esta planificación en esta fecha, la quitamos
+            // Quitar solo si ya se completó el 100% de la planificación diaria
+            const horasPlanDia = pd.horasAsignadas || 0;
             const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            return ejecsEstePlanDia.length === 0;
+            const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+            const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
+            return !completado;
         });
         
         elementosParaMostrar.sort((a,b) => {

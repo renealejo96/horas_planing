@@ -191,7 +191,7 @@ App.registerView('planificacion-diaria', async () => {
             const horasOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
             const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
 
-            if ((horasOtrosDias + horasAsignadas) > horasSemanales || (unidadesOtrosDias + unidadesAsignadas) > unidadesSemanales) {
+            if ((horasOtrosDias + horasAsignadas) > (horasSemanales + 0.05) || (unidadesOtrosDias + unidadesAsignadas) > (unidadesSemanales + 0.05)) {
                 superoPlan = true;
             }
         }
@@ -262,7 +262,7 @@ App.registerView('planificacion-diaria', async () => {
                 const horasOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.horasAsignadas || 0), 0);
                 const unidadesOtrosDias = asignacionesOtrosDias.reduce((s, pd) => s + (pd.unidadesAsignadas || 0), 0);
 
-                if ((horasOtrosDias + horasAsignadas) > horasSemanales || (unidadesOtrosDias + unidadesAsignadas) > unidadesSemanales) {
+                if ((horasOtrosDias + horasAsignadas) > (horasSemanales + 0.05) || (unidadesOtrosDias + unidadesAsignadas) > (unidadesSemanales + 0.05)) {
                     superoPlan = true;
                 }
 
