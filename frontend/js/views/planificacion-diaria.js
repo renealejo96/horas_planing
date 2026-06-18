@@ -182,7 +182,7 @@ App.registerView('planificacion-diaria', async () => {
             const rendOriginal = p.rendimientoUsado || 1;
 
             const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
-            const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+            const unidadesSemanales = p.unidadesPlanificadas || (isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : 0);
 
             const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
                 const pid = pd.planificacionId || pd.planificacion?.id;
@@ -263,7 +263,7 @@ App.registerView('planificacion-diaria', async () => {
                 const rendOriginal = p.rendimientoUsado || 1;
 
                 const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
-                const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+                const unidadesSemanales = p.unidadesPlanificadas || (isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : 0);
 
                 const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
                     const pid = pd.planificacionId || pd.planificacion?.id;
@@ -441,7 +441,7 @@ App.registerView('planificacion-diaria', async () => {
             const rendOriginal = p.rendimientoUsado || 1;
             
             const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
-            const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+            const unidadesSemanales = p.unidadesPlanificadas || (isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : 0);
 
             // Calcular asignaciones en otros días considerando ejecuciones reales
             const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
@@ -466,8 +466,8 @@ App.registerView('planificacion-diaria', async () => {
             return `
                 <div style="text-align:center; padding:2rem; color:var(--text-muted);">
                     <i class="fa-solid fa-check-circle" style="font-size:2.5rem; margin-bottom:0.5rem; color:#10B981; opacity:0.8;"></i>
-                    <p style="font-size:1rem; font-weight:600; color:white;">¡Completado!</p>
-                    <p style="font-size:0.85rem;">Todas las actividades de esta categoría y cultivo han sido asignadas o completadas.</p>
+                    <p style="font-size:1rem; font-weight:600; color:white;">¡Todo asignado!</p>
+                    <p style="font-size:0.85rem;">Todas las actividades de esta categoría y cultivo para hoy ya se encuentran asignadas (ver Asignaciones Realizadas abajo) o no tienen más unidades semanales disponibles.</p>
                 </div>
             `;
         }
@@ -549,7 +549,7 @@ App.registerView('planificacion-diaria', async () => {
                                     const unidadPlaceholder = isCosecha ? 'Tallos' : unidadStr;
                                     
                                     const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
-                                    const unidadesSemanales = isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : (p.unidadesPlanificadas || 0);
+                                    const unidadesSemanales = p.unidadesPlanificadas || (isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : 0);
 
                                     // Calcular asignaciones/ejecuciones consumidas en otros días de la semana
                                     const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
@@ -727,8 +727,8 @@ App.registerView('planificacion-diaria', async () => {
                                             <td><span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD;">${grupo}</span></td>
                                             <td><strong>${dsc}</strong></td>
                                             <td>${p.bloque || p.valvulas || '-'}</td>
-                                            <td style="text-align:right; font-weight:bold; color:#10B981;">${pd.unidadesAsignadas.toFixed(0)}</td>
-                                            <td style="text-align:right; font-weight:bold; color:#10B981;">${pd.horasAsignadas.toFixed(1)}h</td>
+                                            <td style="text-align:right; font-weight:bold; color:#10B981;">${(pd.unidadesAsignadas || 0).toFixed(0)}</td>
+                                            <td style="text-align:right; font-weight:bold; color:#10B981;">${(pd.horasAsignadas || 0).toFixed(1)}h</td>
                                             <td style="color:var(--text-muted); font-size:0.8rem; font-style:italic;">${pd.observacion || ''}</td>
                                             <td style="text-align:center;">
                                                 <button class="btn btn-sm" onclick="eliminarAsignacionDiaria(${pd.id})" 

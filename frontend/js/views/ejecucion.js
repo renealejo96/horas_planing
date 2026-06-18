@@ -28,11 +28,7 @@ App.registerView('ejecucion', async () => {
     const getCultivosDelGrupo = () => {
         const itemsGrupo = planDiarioArr.filter(pd => {
             const p = pd.planificacion;
-            if (!p || p.grupoCalculado !== grupoActivo) return false;
-            
-            // Si ya hay alguna ejecución registrada para esta planificación en esta fecha, la quitamos
-            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            return ejecsEstePlanDia.length === 0;
+            return p && p.grupoCalculado === grupoActivo;
         });
         
         const cultivosMap = new Map();
@@ -1024,12 +1020,7 @@ App.registerView('ejecucion', async () => {
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
             if (pCultivo !== cultivoActivoDiario) return false;
             
-            // Quitar solo si ya se completó el 100% de la planificación diaria
-            const horasPlanDia = pd.horasAsignadas || 0;
-            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
-            const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
-            return !completado;
+            return true;
         });
         
         elementosParaMostrar.sort((a,b) => {
