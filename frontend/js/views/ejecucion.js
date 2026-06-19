@@ -45,6 +45,7 @@ App.registerView('ejecucion', async () => {
     };
 
     const renderCultivoTabsDiario = () => {
+        if (grupoActivo === 'COSECHA') return '';
         const cultivos = getCultivosDelGrupo();
         if (!cultivos.length) return '<div style="color:var(--text-muted); font-size:0.8rem; padding: 0.5rem 0;">Sin cultivos con ejecuciones pendientes</div>';
         
@@ -353,7 +354,7 @@ App.registerView('ejecucion', async () => {
             if (!p || p.grupoCalculado !== grupoActivo) return false;
             
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
-            if (pCultivo !== cultivoActivoDiario) return false;
+            if (grupoActivo !== 'COSECHA' && pCultivo !== cultivoActivoDiario) return false;
             
             const horasPlanDia = pd.horasAsignadas || 0;
             const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
@@ -1018,15 +1019,9 @@ App.registerView('ejecucion', async () => {
             if (!p || p.grupoCalculado !== grupoActivo) return false;
             
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
-            if (pCultivo !== cultivoActivoDiario) return false;
+            if (grupoActivo !== 'COSECHA' && pCultivo !== cultivoActivoDiario) return false;
             
             return true;
-        });
-        
-        elementosParaMostrar.sort((a,b) => {
-            const cultA = (a.planificacion?.actividad?.producto?.nombre || a.planificacion?.actividad?.nombre || '').toUpperCase();
-            const cultB = (b.planificacion?.actividad?.producto?.nombre || b.planificacion?.actividad?.nombre || '').toUpperCase();
-            return cultA.localeCompare(cultB);
         });
 
         if (elementosParaMostrar.length === 0) {
@@ -1039,90 +1034,119 @@ App.registerView('ejecucion', async () => {
                 </tr>
             `;
         }
-        return elementosParaMostrar.map(pd => {
+
+        // Agrupar por Cultivo
+        const porCultivo = {};
+        elementosParaMostrar.forEach(pd => {
             const p = pd.planificacion;
-            if(!p) return '';
+            if (!p) return;
+            const cultivoKey = p.actividad?.producto?.nombre || 'GENERAL';
+            if (!porCultivo[cultivoKey]) porCultivo[cultivoKey] = [];
+            porCultivo[cultivoKey].push(pd);
+        });
+
+        const cultivosOrdenados = Object.keys(porCultivo).sort();
+        let html = '';
+
+        cultivosOrdenados.forEach(cultivoName => {
+            const itemsCultivo = porCultivo[cultivoName];
             
-            const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'OTRO').toUpperCase();
-            const isCosecha = rawName.includes('COSECHA');
-            
-            const rendRelacionado = rendimientos.find(r => r.actividad?.id === p.actividad?.id && (!p.actividad?.producto || r.producto?.id === p.actividad?.producto?.id));
-            const getPlaceholderUnidad = (unidadCodigo) => {
-                switch(unidadCodigo) {
-                    case 'PLANTAS_HORA': return 'Pts';
-                    case 'MALLAS_HORA': return 'Mallas';
-                    case 'PINGOS_HORA': return 'Pingos';
-                    case 'CAMAS_HORA': return 'Camas';
-                    default: return 'unid';
-                }
-            };
-            const unidadPlaceholder = isCosecha ? 'Tallos' : getPlaceholderUnidad(rendRelacionado?.unidad?.codigo);
-            
-            const horasPlanDia = pd.horasAsignadas || 0;
-            const uniPlanDia = pd.unidadesAsignadas || 0;
-            
-            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
-            const unidadesEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
-            
-            const pendiente = Math.max(0, horasPlanDia - horasEjecDia);
-            const uniPendiente = Math.max(0, uniPlanDia - unidadesEjecDia);
-            const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
-            
-            const pdcto = p.producto || p.actividad?.producto;
-            const dsc = (pdcto && pdcto.nombre) ? `${pdcto.nombre} - ${p.actividad?.nombre || ''}` : (p.actividad?.nombre || '-');
-            
-            return `
-                <tr data-id="${p.id}" data-producto-codigo="${pdcto ? pdcto.codigo : ''}" data-is-cosecha="${isCosecha}" style="${completado ? 'opacity:0.6;' : ''}">
-                    <td>
-                        ${completado ? '<i class="fa-solid fa-check-circle" style="color:#10B981;"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted);"></i>'}
-                    </td>
-                    <td>${p.actividad?.area?.nombre || '-'}</td>
-                    <td>
-                        <strong>${dsc}</strong>
-                    </td>
-                    <td>${p.bloque || p.valvulas || '-'}</td>
-                    <td style="text-align:right;">
-                        <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block; margin-bottom:2px;">${uniPlanDia.toFixed(0)} ${unidadPlaceholder}</span>
-                        <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block;">${horasPlanDia.toFixed(1)}h</span>
-                    </td>
-                    <td style="text-align:right;">
-                        <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block; margin-bottom:2px;">
-                            ${unidadesEjecDia.toFixed(0)}
-                        </span>
-                        <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block;">
-                            ${horasEjecDia.toFixed(1)}h
-                        </span>
-                    </td>
-                    <td style="text-align:center; font-weight:bold; color:var(--text-muted); font-size:0.8rem;">
-                        ${unidadPlaceholder}
-                    </td>
-                    ${!completado ? `
-                        <td style="text-align:center;">
-                            <input type="number" id="unidades-real-${p.id}" placeholder="${uniPendiente.toFixed(0)}" min="0" onfocus="this.select()"
-                                   oninput="calcularRendimientoReal(${p.id})"
-                                   ${isCosecha ? 'readonly tabindex="-1"' : ''}
-                                   style="width:70px; padding:0.3rem; border-radius:6px; background:${isCosecha ? 'rgba(255,255,255,0.05)' : 'var(--surface-glass)'}; border:1px solid ${isCosecha ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)'}; color:${isCosecha ? '#94A3B8' : 'white'}; text-align:center; cursor:${isCosecha ? 'not-allowed' : 'auto'};">
+            // Fila separadora si estamos en cosecha
+            if (grupoActivo === 'COSECHA') {
+                html += `
+                    <tr style="background:rgba(245,158,11,0.05); font-weight:bold; border-left:3px solid #F59E0B;">
+                        <td colspan="11" style="padding:0.5rem 0.8rem; color:#F59E0B; font-size:0.8rem; font-weight:700;">
+                            <i class="fa-solid fa-leaf" style="margin-right:0.3rem;"></i> CULTIVO: ${cultivoName.toUpperCase()}
                         </td>
-                        <td style="text-align:center;">
-                            <input type="number" id="horas-real-${p.id}" placeholder="${pendiente.toFixed(1)}" step="0.5" min="0" onfocus="this.select()"
-                                   oninput="calcularRendimientoReal(${p.id})"
-                                   style="width:70px; padding:0.3rem; border-radius:6px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white; text-align:center;">
-                        </td>
-                        <td style="text-align:center;">
-                            <span id="rend-real-${p.id}" style="color:var(--text-muted);">--</span>
-                        </td>
+                    </tr>
+                `;
+            }
+
+            itemsCultivo.forEach(pd => {
+                const p = pd.planificacion;
+                const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'OTRO').toUpperCase();
+                const isCosecha = rawName.includes('COSECHA');
+                
+                const rendRelacionado = rendimientos.find(r => r.actividad?.id === p.actividad?.id && (!p.actividad?.producto || r.producto?.id === p.actividad?.producto?.id));
+                const getPlaceholderUnidad = (unidadCodigo) => {
+                    switch(unidadCodigo) {
+                        case 'PLANTAS_HORA': return 'Pts';
+                        case 'MALLAS_HORA': return 'Mallas';
+                        case 'PINGOS_HORA': return 'Pingos';
+                        case 'CAMAS_HORA': return 'Camas';
+                        default: return 'unid';
+                    }
+                };
+                const unidadPlaceholder = isCosecha ? 'Tallos' : getPlaceholderUnidad(rendRelacionado?.unidad?.codigo);
+                
+                const horasPlanDia = pd.horasAsignadas || 0;
+                const uniPlanDia = pd.unidadesAsignadas || 0;
+                
+                const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
+                const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                const unidadesEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                
+                const pendiente = Math.max(0, horasPlanDia - horasEjecDia);
+                const uniPendiente = Math.max(0, uniPlanDia - unidadesEjecDia);
+                const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
+                
+                const pdcto = p.producto || p.actividad?.producto;
+                const dsc = (pdcto && pdcto.nombre) ? `${pdcto.nombre} - ${p.actividad?.nombre || ''}` : (p.actividad?.nombre || '-');
+                
+                html += `
+                    <tr data-id="${p.id}" data-producto-codigo="${pdcto ? pdcto.codigo : ''}" data-is-cosecha="${isCosecha}" style="${completado ? 'opacity:0.6;' : ''}">
                         <td>
-                            <button class="btn btn-primary" style="padding:0.4rem 0.8rem; background:linear-gradient(135deg, #10B981, #059669); border:none;" onclick="guardarEjecucionLinea(${p.id})" title="Guardar avance">
-                                <i class="fa-solid fa-floppy-disk"></i>
-                            </button>
+                            ${completado ? '<i class="fa-solid fa-check-circle" style="color:#10B981;"></i>' : '<i class="fa-regular fa-circle" style="color:var(--text-muted);"></i>'}
                         </td>
-                    ` : `
-                        <td colspan="4" style="text-align:center; color:#10B981;"><i class="fa-solid fa-check-double"></i> Completado (${unidadesEjecDia} u)</td>
-                    `}
-                </tr>
-            `;
-        }).join('');
+                        <td>${p.actividad?.area?.nombre || '-'}</td>
+                        <td>
+                            <strong>${dsc}</strong>
+                        </td>
+                        <td>${p.bloque || p.valvulas || '-'}</td>
+                        <td style="text-align:right;">
+                            <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block; margin-bottom:2px;">${uniPlanDia.toFixed(0)} ${unidadPlaceholder}</span>
+                            <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block;">${horasPlanDia.toFixed(1)}h</span>
+                        </td>
+                        <td style="text-align:right;">
+                            <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block; margin-bottom:2px;">
+                                ${unidadesEjecDia.toFixed(0)}
+                            </span>
+                            <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block;">
+                                ${horasEjecDia.toFixed(1)}h
+                            </span>
+                        </td>
+                        <td style="text-align:center; font-weight:bold; color:var(--text-muted); font-size:0.8rem;">
+                            ${unidadPlaceholder}
+                        </td>
+                        ${!completado ? `
+                            <td style="text-align:center;">
+                                <input type="number" id="unidades-real-${p.id}" placeholder="${uniPendiente.toFixed(0)}" min="0" onfocus="this.select()"
+                                       oninput="calcularRendimientoReal(${p.id})"
+                                       ${isCosecha ? 'readonly tabindex="-1"' : ''}
+                                       style="width:70px; padding:0.3rem; border-radius:6px; background:${isCosecha ? 'rgba(255,255,255,0.05)' : 'var(--surface-glass)'}; border:1px solid ${isCosecha ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)'}; color:${isCosecha ? '#94A3B8' : 'white'}; text-align:center; cursor:${isCosecha ? 'not-allowed' : 'auto'};">
+                            </td>
+                            <td style="text-align:center;">
+                                <input type="number" id="horas-real-${p.id}" placeholder="${pendiente.toFixed(1)}" step="0.5" min="0" onfocus="this.select()"
+                                       oninput="calcularRendimientoReal(${p.id})"
+                                       style="width:70px; padding:0.3rem; border-radius:6px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white; text-align:center;">
+                            </td>
+                            <td style="text-align:center;">
+                                <span id="rend-real-${p.id}" style="color:var(--text-muted);">--</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-primary" style="padding:0.4rem 0.8rem; background:linear-gradient(135deg, #10B981, #059669); border:none;" onclick="guardarEjecucionLinea(${p.id})" title="Guardar avance">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                </button>
+                            </td>
+                        ` : `
+                            <td colspan="4" style="text-align:center; color:#10B981;"><i class="fa-solid fa-check-double"></i> Completado (${unidadesEjecDia} u)</td>
+                        `}
+                    </tr>
+                `;
+            });
+        });
+
+        return html;
     };
     
     // Generar opciones de días de la semana

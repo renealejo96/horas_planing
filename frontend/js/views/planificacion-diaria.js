@@ -358,6 +358,7 @@ App.registerView('planificacion-diaria', async () => {
     };
 
     const renderCultivoTabsDiario = () => {
+        if (grupoActivo === 'COSECHA') return '';
         const cultivos = getCultivosDelGrupo();
         if (!cultivos.length) return '<div style="color:var(--text-muted); font-size:0.8rem; padding: 0.5rem 0;">Sin cultivos con planificación pendiente</div>';
         
@@ -430,37 +431,11 @@ App.registerView('planificacion-diaria', async () => {
         // 1. Filtrar por GRUPO ACTIVO y CULTIVO ACTIVO y excluir ya asignadas para hoy
         const itemsGrupo = planificacionItems.filter(p => {
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
-            return p.grupoCalculado === grupoActivo && !planDiarioPorPlan[p.id] && pCultivo === cultivoActivoDiario;
+            return p.grupoCalculado === grupoActivo && !planDiarioPorPlan[p.id] && (grupoActivo === 'COSECHA' || pCultivo === cultivoActivoDiario);
         });
 
-        // Filtrar solo los que tengan disponible > 0
-        const itemsGrupoFiltrados = itemsGrupo.filter(p => {
-            const isCosecha = grupoActivo === 'COSECHA';
-            const productoCodigo = p.actividad?.producto?.codigo;
-            const tallosMalla = p.actividad?.producto?.tallosPorMalla || TALLOS_POR_MALLA[productoCodigo] || 25;
-            const rendOriginal = p.rendimientoUsado || 1;
-            
-            const horasSemanales = p.horasAjustadas || p.horasCalculadas || 0;
-            const unidadesSemanales = p.unidadesPlanificadas || (isCosecha ? Math.round(horasSemanales * rendOriginal * tallosMalla) : 0);
-
-            // Calcular asignaciones en otros días considerando ejecuciones reales
-            const asignacionesOtrosDias = allPlanificacionDiariaSemana.filter(pd => {
-                const pid = pd.planificacionId || pd.planificacion?.id;
-                return pid === p.id && pd.fecha !== fechaSeleccionada;
-            });
-            let unidadesOtrosDias = 0;
-            asignacionesOtrosDias.forEach(pd => {
-                const ejecsDia = ejecucionesSemana.filter(e => e.planificacion?.id === p.id && e.fecha === pd.fecha);
-                if (ejecsDia.length > 0) {
-                    unidadesOtrosDias += ejecsDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
-                } else {
-                    unidadesOtrosDias += pd.unidadesAsignadas || 0;
-                }
-            });
-            const unidadesDisponiblesDia = unidadesSemanales - unidadesOtrosDias;
-            
-            return unidadesDisponiblesDia > 0.01;
-        });
+        // Mostrar todas las planificaciones del grupo (no filtrar las que tengan disponible <= 0 para permitir sobrepasar presupuesto)
+        const itemsGrupoFiltrados = itemsGrupo;
         
         if (itemsGrupoFiltrados.length === 0) {
             return `
@@ -694,55 +669,73 @@ App.registerView('planificacion-diaria', async () => {
 
         const expandido = !!window.asignacionesRealizadasExpandido;
 
+        // Agrupar asignaciones diarias por grupo calculado
+        const agrupadas = {};
+        planificacionDiaria.forEach(pd => {
+            const p = pd.planificacion;
+            if (!p) return;
+            const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'GENERAL').toUpperCase();
+            const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+            if (!agrupadas[grupo]) agrupadas[grupo] = [];
+            agrupadas[grupo].push(pd);
+        });
+
+        const gruposOrdenados = Object.keys(agrupadas).sort();
+
         return `
             <div class="card" style="margin-top:1.5rem; border:1px solid rgba(16, 185, 129, 0.2);">
                 <div onclick="toggleAsignacionesRealizadas()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
-                    <h3 style="margin:0;"><i class="fa-solid fa-clipboard-check" style="color:#10B981; margin-right:0.5rem;"></i> Asignaciones Realizadas (${fechaSeleccionada}) <span class="badge" style="margin-left:0.5rem; background:#10B981; color:white;">${planificacionDiaria.length}</span></h3>
+                    <h3><i class="fa-solid fa-clipboard-check" style="color:#10B981; margin-right:0.5rem;"></i> Asignaciones Realizadas (${fechaSeleccionada}) <span class="badge" style="margin-left:0.5rem; background:#10B981; color:white;">${planificacionDiaria.length}</span></h3>
                     <i class="fa-solid ${expandido ? 'fa-chevron-up' : 'fa-chevron-down'}" style="color:var(--text-muted);"></i>
                 </div>
                 <div id="asignaciones-realizadas-contenido" style="display:${expandido ? 'block' : 'none'}; margin-top:1.5rem;">
-                    <div style="overflow-x:auto;">
-                        <table>
-                            <thead>
-                                <tr style="text-transform:uppercase; font-size:0.75rem; color:var(--text-muted);">
-                                    <th>Grupo</th>
-                                    <th>Actividad</th>
-                                    <th>Bloque</th>
-                                    <th style="text-align:right;">U. Asignadas</th>
-                                    <th style="text-align:right;">H. Asignadas</th>
-                                    <th>Nota</th>
-                                    <th style="text-align:center; width:80px;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${planificacionDiaria.map(pd => {
-                                    const p = pd.planificacion;
-                                    if (!p) return '';
-                                    const rawName = (p.actividad?.laborMadre || 'GENERAL').toUpperCase();
-                                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
-                                    const cultivo = p.actividad?.producto?.nombre || 'GENERAL';
-                                    const dsc = `${cultivo} - ${p.actividad?.nombre || ''}`;
-                                    return `
-                                        <tr style="border-top:1px solid rgba(255,255,255,0.03);">
-                                            <td><span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD;">${grupo}</span></td>
-                                            <td><strong>${dsc}</strong></td>
-                                            <td>${p.bloque || p.valvulas || '-'}</td>
-                                            <td style="text-align:right; font-weight:bold; color:#10B981;">${(pd.unidadesAsignadas || 0).toFixed(0)}</td>
-                                            <td style="text-align:right; font-weight:bold; color:#10B981;">${(pd.horasAsignadas || 0).toFixed(1)}h</td>
-                                            <td style="color:var(--text-muted); font-size:0.8rem; font-style:italic;">${pd.observacion || ''}</td>
-                                            <td style="text-align:center;">
-                                                <button class="btn btn-sm" onclick="eliminarAsignacionDiaria(${pd.id})" 
-                                                    style="color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); padding:5px 8px; border-radius:6px; cursor:pointer;"
-                                                    title="Eliminar asignación (volverá al listado de pendientes)">
-                                                    <i class="fa-solid fa-trash-can"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
+                    ${gruposOrdenados.map(grupo => {
+                        const items = agrupadas[grupo];
+                        return `
+                            <div style="margin-bottom: 1.5rem;">
+                                <h4 style="color:#3B82F6; border-bottom: 1px solid rgba(59, 130, 246, 0.3); padding-bottom: 0.3rem; margin-bottom: 0.5rem; text-transform: uppercase; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fa-solid fa-folder-open"></i> ${grupo} (${items.length})
+                                </h4>
+                                <div style="overflow-x:auto;">
+                                    <table style="width:100%; border-collapse:collapse;">
+                                        <thead>
+                                            <tr style="text-transform:uppercase; font-size:0.75rem; color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.1);">
+                                                <th style="padding:0.5rem;">Actividad</th>
+                                                <th style="padding:0.5rem;">Bloque</th>
+                                                <th style="padding:0.5rem; text-align:right;">U. Asignadas</th>
+                                                <th style="padding:0.5rem; text-align:right;">H. Asignadas</th>
+                                                <th style="padding:0.5rem;">Nota</th>
+                                                <th style="padding:0.5rem; text-align:center; width:80px;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${items.map(pd => {
+                                                const p = pd.planificacion;
+                                                const cultivo = p.actividad?.producto?.nombre || 'GENERAL';
+                                                const dsc = `${cultivo} - ${p.actividad?.nombre || ''}`;
+                                                return `
+                                                    <tr style="border-top:1px solid rgba(255,255,255,0.03);">
+                                                        <td style="padding:0.5rem;"><strong>${dsc}</strong></td>
+                                                        <td style="padding:0.5rem;">${p.bloque || p.valvulas || '-'}</td>
+                                                        <td style="padding:0.5rem; text-align:right; font-weight:bold; color:#10B981;">${(pd.unidadesAsignadas || 0).toFixed(0)}</td>
+                                                        <td style="padding:0.5rem; text-align:right; font-weight:bold; color:#10B981;">${(pd.horasAsignadas || 0).toFixed(1)}h</td>
+                                                        <td style="padding:0.5rem; color:var(--text-muted); font-size:0.8rem; font-style:italic;">${pd.observacion || ''}</td>
+                                                        <td style="padding:0.5rem; text-align:center;">
+                                                            <button class="btn btn-sm" onclick="eliminarAsignacionDiaria(${pd.id})" 
+                                                                style="color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); padding:5px 8px; border-radius:6px; cursor:pointer;"
+                                                                title="Eliminar asignación (volverá al listado de pendientes)">
+                                                                <i class="fa-solid fa-trash-can"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                `;
+                                            }).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
