@@ -498,7 +498,7 @@ App.registerView('comparativa', async () => {
                          onmouseover="this.style.background='rgba(59,130,246,0.1)'"
                          onmouseout="this.style.background='rgba(59,130,246,0.06)'">
                         <div style="display:flex; align-items:center; gap:0.5rem;">
-                            <i id="icon-group-${containerId}" class="fa-solid fa-chevron-down" style="color:var(--primary); font-size:0.85rem; transition: transform 0.2s;"></i>
+                            <i id="icon-group-${containerId}" class="fa-solid fa-chevron-right" style="color:var(--primary); font-size:0.85rem; transition: transform 0.2s;"></i>
                             <h4 style="color:var(--primary); text-transform:uppercase; font-size:0.95rem; font-weight:800; margin:0; letter-spacing:0.5px;">
                                 ${grupo}
                             </h4>
@@ -520,7 +520,7 @@ App.registerView('comparativa', async () => {
                     </div>
 
                     <!-- Tabla de items -->
-                    <div id="${containerId}" style="overflow-x:auto; display:block;">
+                    <div id="${containerId}" style="overflow-x:auto; display:none;">
                         <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
                             <thead style="background:rgba(0,0,0,0.2); color:var(--text-muted); text-transform:uppercase; font-size:0.65rem; letter-spacing:0.5px;">
                                 <tr>

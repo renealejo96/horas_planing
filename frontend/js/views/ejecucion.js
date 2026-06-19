@@ -17,7 +17,7 @@ App.registerView('ejecucion', async () => {
     const fechaHoy = getLocalIsoDate(hoy);
 
     // Cargar semana en ejecución y su planificación
-    let semanaActual = null, planDiarioArr = [], planificacionItems = [], ejecuciones = [], areas = [], actividades = [], rendimientos = [], productos = [], fueraGrupos = [];
+    let semanaActual = null, planificacionItems = [], ejecuciones = [], areas = [], actividades = [], rendimientos = [], productos = [], fueraGrupos = [];
     let grupoActivo = null;
     let gruposUnicos = [];
     let fechaSeleccionada = window.fechaGlobalSeleccionada || fechaHoy;
@@ -26,14 +26,12 @@ App.registerView('ejecucion', async () => {
     let cultivoActivoDiario = null;
     
     const getCultivosDelGrupo = () => {
-        const itemsGrupo = planDiarioArr.filter(pd => {
-            const p = pd.planificacion;
+        const itemsGrupo = planificacionItems.filter(p => {
             return p && p.grupoCalculado === grupoActivo;
         });
         
         const cultivosMap = new Map();
-        itemsGrupo.forEach(pd => {
-            const p = pd.planificacion;
+        itemsGrupo.forEach(p => {
             const pdcto = p.producto || p.actividad?.producto;
             if (pdcto) {
                 cultivosMap.set(pdcto.codigo, pdcto.nombre);
@@ -91,7 +89,6 @@ App.registerView('ejecucion', async () => {
         
         if (semanaActual) {
             planificacionItems = await api.getPlanificacionSemana(semanaActual.codigoAass).catch(() => []);
-            planDiarioArr = await api.getPlanDiarioFecha(fechaSeleccionada).catch(() => []);
             
             // Filtrar por permisos de usuario
             const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -99,12 +96,6 @@ App.registerView('ejecucion', async () => {
                 const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
                 planificacionItems = planificacionItems.filter(p => {
                     const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'OTRO').toUpperCase();
-                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
-                    return permitidas.includes(grupo);
-                });
-                planDiarioArr = planDiarioArr.filter(pd => {
-                    if (!pd.planificacion) return false;
-                    const rawName = (pd.planificacion.actividad?.laborMadre || pd.planificacion.actividad?.grupo || pd.planificacion.actividad?.nombre || 'OTRO').toUpperCase();
                     const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
                     return permitidas.includes(grupo);
                 });
@@ -118,14 +109,6 @@ App.registerView('ejecucion', async () => {
                 gruposSet.add(p.grupoCalculado);
             });
             
-            // Etiquetar la colección separada de planDiarioArr para el filtro de la vista
-            planDiarioArr.forEach(pd => {
-                if(pd.planificacion) {
-                    const rawName = (pd.planificacion.actividad?.laborMadre || pd.planificacion.actividad?.grupo || pd.planificacion.actividad?.nombre || 'OTRO').toUpperCase();
-                    pd.planificacion.grupoCalculado = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
-                    gruposSet.add(pd.planificacion.grupoCalculado);
-                }
-            });
             gruposUnicos = Array.from(gruposSet).sort();
             
             if (gruposUnicos.length > 0 && (!grupoActivo || !gruposUnicos.includes(grupoActivo))) {
@@ -210,7 +193,13 @@ App.registerView('ejecucion', async () => {
     const porcentajeEjecucion = totalHorasPlanificadas > 0 ? Math.min(100, (totalHorasEjecutadas / totalHorasPlanificadas) * 100) : 0;
     
     // Calcular el total para el DIA
-    const totalHorasPlanificadasDia = planDiarioArr.reduce((sum, pd) => sum + (pd.horasAsignadas || 0), 0);
+    const totalHorasPlanificadasDia = planificacionItems.reduce((sum, p) => {
+        const ejecsSemana = ejecuciones.filter(e => e.planificacion?.id === p.id);
+        const ejecsOtrosDias = ejecsSemana.filter(e => e.fecha !== fechaSeleccionada);
+        const horasEjecOtros = ejecsOtrosDias.reduce((s, e) => s + (e.horasReales || 0), 0);
+        const horasPlanSemana = p.horasAjustadas || p.horasCalculadas || 0;
+        return sum + Math.max(0, horasPlanSemana - horasEjecOtros);
+    }, 0);
     const totalHorasEjecutadasDia = ejecuciones.filter(e => e.fecha === fechaSeleccionada && e.planificacion).reduce((sum, e) => sum + (e.horasReales || 0), 0);
     
     // Función para calcular rendimiento real
@@ -355,31 +344,27 @@ App.registerView('ejecucion', async () => {
 
     // Guardar ejecución de todo lo ingresado en el listado activo
     window.guardarTodoEjecucion = async () => {
-        const elementosParaMostrar = planDiarioArr.filter(pd => {
-            const p = pd.planificacion;
+        const elementosParaMostrar = planificacionItems.filter(p => {
             if (!p || p.grupoCalculado !== grupoActivo) return false;
             
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
             if (grupoActivo !== 'COSECHA' && pCultivo !== cultivoActivoDiario) return false;
             
-            const horasPlanDia = pd.horasAsignadas || 0;
-            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
-            const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
+            const ejecsSemana = ejecuciones.filter(e => e.planificacion?.id === p.id);
+            const totalHorasEjecutadasSemana = ejecsSemana.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+            const horasPlanSemana = p.horasAjustadas || p.horasCalculadas || 0;
+            const completado = totalHorasEjecutadasSemana >= horasPlanSemana && horasPlanSemana > 0;
             return !completado;
         });
 
         const promesas = [];
         let creados = 0;
 
-        for (const pd of elementosParaMostrar) {
-            const p = pd.planificacion;
-            if (!p) continue;
-
-            const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-            const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
-            const planHoras = pd.horasAsignadas || 0;
-            const completado = horasEjecDia >= planHoras && planHoras > 0;
+        for (const p of elementosParaMostrar) {
+            const ejecsSemana = ejecuciones.filter(e => e.planificacion?.id === p.id);
+            const totalHorasEjecutadasSemana = ejecsSemana.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+            const horasPlanSemana = p.horasAjustadas || p.horasCalculadas || 0;
+            const completado = totalHorasEjecutadasSemana >= horasPlanSemana && horasPlanSemana > 0;
 
             if (completado) continue; // Saltear filas completadas
 
@@ -995,17 +980,8 @@ App.registerView('ejecucion', async () => {
                     horasAjustadas: item.horasPlanificacion
                 });
                 
-                // 2. Crear asignación diaria (planificación diaria)
+                // 2. Registrar la ejecución real inmediatamente
                 if (newPlan && newPlan.id) {
-                    await api.crearPlanDiario({
-                        planificacionId: newPlan.id,
-                        fecha: fechaSeleccionada,
-                        horasAsignadas: item.horasPlanificacion,
-                        unidadesAsignadas: item.unidades,
-                        observacion: '[IMPREVISTO]'
-                    });
-
-                    // 3. Registrar la ejecución real inmediatamente
                     const rendimientoReal = item.unidades / item.horasReales;
                     await api.createEjecucion({
                         planificacion: { id: newPlan.id },
@@ -1020,7 +996,7 @@ App.registerView('ejecucion', async () => {
                 guardados++;
             }
             
-            showNotification(`✓ Se agregaron y asignaron ${guardados} actividades fuera de plan.`, 'success');
+            showNotification(`✓ Se agregaron ${guardados} actividades fuera de plan.`, 'success');
             // Recargar vista
             App.navigate('ejecucion');
         } catch (e) {
@@ -1051,10 +1027,9 @@ App.registerView('ejecucion', async () => {
             areas.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('');
     };
     
-    // Renderizar tabla de ejecución DIARIA
+    // Renderizar tabla de ejecución DIARIA (basada en el plan semanal y ejecuciones)
     window.renderPlanificacionParaEjecutar = () => {
-        const elementosParaMostrar = planDiarioArr.filter(pd => {
-            const p = pd.planificacion;
+        const elementosParaMostrar = planificacionItems.filter(p => {
             if (!p || p.grupoCalculado !== grupoActivo) return false;
             
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
@@ -1068,7 +1043,7 @@ App.registerView('ejecucion', async () => {
                 <tr>
                     <td colspan="11" style="text-align:center; color:var(--text-muted); padding:2rem;">
                         <i class="fa-solid fa-calendar-xmark" style="font-size:2rem; margin-bottom:0.5rem; display:block; opacity:0.5;"></i>
-                        No hay Plan Diario asignado para la categoría <strong>${grupoActivo}</strong> en la fecha <strong>${fechaSeleccionada}</strong>.<br>Ve a la pantalla de <strong>Plan Diario</strong> para asignarlo.
+                        No hay actividades planificadas para la categoría <strong>${grupoActivo}</strong> en esta semana.
                     </td>
                 </tr>
             `;
@@ -1076,12 +1051,10 @@ App.registerView('ejecucion', async () => {
 
         // Agrupar por Cultivo
         const porCultivo = {};
-        elementosParaMostrar.forEach(pd => {
-            const p = pd.planificacion;
-            if (!p) return;
+        elementosParaMostrar.forEach(p => {
             const cultivoKey = p.actividad?.producto?.nombre || 'GENERAL';
             if (!porCultivo[cultivoKey]) porCultivo[cultivoKey] = [];
-            porCultivo[cultivoKey].push(pd);
+            porCultivo[cultivoKey].push(p);
         });
 
         const cultivosOrdenados = Object.keys(porCultivo).sort();
@@ -1101,8 +1074,7 @@ App.registerView('ejecucion', async () => {
                 `;
             }
 
-            itemsCultivo.forEach(pd => {
-                const p = pd.planificacion;
+            itemsCultivo.forEach(p => {
                 const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'OTRO').toUpperCase();
                 const isCosecha = rawName.includes('COSECHA');
                 
@@ -1118,16 +1090,24 @@ App.registerView('ejecucion', async () => {
                 };
                 const unidadPlaceholder = isCosecha ? 'Tallos' : getPlaceholderUnidad(rendRelacionado?.unidad?.codigo);
                 
-                const horasPlanDia = pd.horasAsignadas || 0;
-                const uniPlanDia = pd.unidadesAsignadas || 0;
+                const ejecsSemana = ejecuciones.filter(e => e.planificacion?.id === p.id);
+                const ejecsOtrosDias = ejecsSemana.filter(e => e.fecha !== fechaSeleccionada);
+                const horasEjecOtros = ejecsOtrosDias.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                const unidadesEjecOtros = ejecsOtrosDias.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+
+                const horasPlanSemana = p.horasAjustadas || p.horasCalculadas || 0;
+                const unidadesPlanSemana = p.unidadesPlanificadas || 0;
+
+                const horasDisponiblesHoy = Math.max(0, horasPlanSemana - horasEjecOtros);
+                const unidadesDisponiblesHoy = Math.max(0, unidadesPlanSemana - unidadesEjecOtros);
                 
-                const ejecsEstePlanDia = ejecuciones.filter(e => e.planificacion?.id === p.id && e.fecha === fechaSeleccionada);
-                const horasEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.horasReales || 0), 0);
-                const unidadesEjecDia = ejecsEstePlanDia.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                const ejecsHoy = ejecsSemana.filter(e => e.fecha === fechaSeleccionada);
+                const horasEjecutadasHoy = ejecsHoy.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                const unidadesEjecutadasHoy = ejecsHoy.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
                 
-                const pendiente = Math.max(0, horasPlanDia - horasEjecDia);
-                const uniPendiente = Math.max(0, uniPlanDia - unidadesEjecDia);
-                const completado = horasEjecDia >= horasPlanDia && horasPlanDia > 0;
+                const totalHorasEjecutadasSemana = ejecsSemana.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                const totalUnidadesEjecutadasSemana = ejecsSemana.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+                const completado = totalHorasEjecutadasSemana >= horasPlanSemana && horasPlanSemana > 0;
                 
                 const pdcto = p.producto || p.actividad?.producto;
                 const dsc = (pdcto && pdcto.nombre) ? `${pdcto.nombre} - ${p.actividad?.nombre || ''}` : (p.actividad?.nombre || '-');
@@ -1143,15 +1123,15 @@ App.registerView('ejecucion', async () => {
                         </td>
                         <td>${p.bloque || p.valvulas || '-'}</td>
                         <td style="text-align:right;">
-                            <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block; margin-bottom:2px;">${uniPlanDia.toFixed(0)} ${unidadPlaceholder}</span>
-                            <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block;">${horasPlanDia.toFixed(1)}h</span>
+                            <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block; margin-bottom:2px;" title="Planificado Semana: ${unidadesPlanSemana.toFixed(0)}">Disp: ${unidadesDisponiblesHoy.toFixed(0)} / ${unidadesPlanSemana.toFixed(0)} ${unidadPlaceholder}</span>
+                            <span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; display:block;" title="Planificado Semana: ${horasPlanSemana.toFixed(1)}h">Disp: ${horasDisponiblesHoy.toFixed(1)} / ${horasPlanSemana.toFixed(1)}h</span>
                         </td>
                         <td style="text-align:right;">
-                            <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block; margin-bottom:2px;">
-                                ${unidadesEjecDia.toFixed(0)}
+                            <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block; margin-bottom:2px;" title="Ejecutado Semana: ${totalUnidadesEjecutadasSemana.toFixed(0)}">
+                                Hoy: ${unidadesEjecutadasHoy.toFixed(0)} (${totalUnidadesEjecutadasSemana.toFixed(0)})
                             </span>
-                            <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block;">
-                                ${horasEjecDia.toFixed(1)}h
+                            <span class="badge" style="background:${completado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}; color:${completado ? '#A7F3D0' : '#FCD34D'}; display:block;" title="Ejecutado Semana: ${totalHorasEjecutadasSemana.toFixed(1)}h">
+                                Hoy: ${horasEjecutadasHoy.toFixed(1)}h (${totalHorasEjecutadasSemana.toFixed(1)}h)
                             </span>
                         </td>
                         <td style="text-align:center; font-weight:bold; color:var(--text-muted); font-size:0.8rem;">
@@ -1159,13 +1139,13 @@ App.registerView('ejecucion', async () => {
                         </td>
                         ${!completado ? `
                             <td style="text-align:center;">
-                                <input type="number" id="unidades-real-${p.id}" placeholder="${uniPendiente.toFixed(0)}" min="0" onfocus="this.select()"
+                                <input type="number" id="unidades-real-${p.id}" placeholder="${unidadesDisponiblesHoy.toFixed(0)}" min="0" onfocus="this.select()"
                                        oninput="calcularRendimientoReal(${p.id})"
                                        ${isCosecha ? 'readonly tabindex="-1"' : ''}
                                        style="width:70px; padding:0.3rem; border-radius:6px; background:${isCosecha ? 'rgba(255,255,255,0.05)' : 'var(--surface-glass)'}; border:1px solid ${isCosecha ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)'}; color:${isCosecha ? '#94A3B8' : 'white'}; text-align:center; cursor:${isCosecha ? 'not-allowed' : 'auto'};">
                             </td>
                             <td style="text-align:center;">
-                                <input type="number" id="horas-real-${p.id}" placeholder="${pendiente.toFixed(1)}" step="0.5" min="0" onfocus="this.select()"
+                                <input type="number" id="horas-real-${p.id}" placeholder="${horasDisponiblesHoy.toFixed(1)}" step="0.5" min="0" onfocus="this.select()"
                                        oninput="calcularRendimientoReal(${p.id})"
                                        style="width:70px; padding:0.3rem; border-radius:6px; background:var(--surface-glass); border:1px solid rgba(255,255,255,0.2); color:white; text-align:center;">
                             </td>
@@ -1178,7 +1158,7 @@ App.registerView('ejecucion', async () => {
                                 </button>
                             </td>
                         ` : `
-                            <td colspan="4" style="text-align:center; color:#10B981;"><i class="fa-solid fa-check-double"></i> Completado (${unidadesEjecDia} u)</td>
+                            <td colspan="4" style="text-align:center; color:#10B981;"><i class="fa-solid fa-check-double"></i> Completado (${totalUnidadesEjecutadasSemana.toFixed(0)} u)</td>
                         `}
                     </tr>
                 `;
