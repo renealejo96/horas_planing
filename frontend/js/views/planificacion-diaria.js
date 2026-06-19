@@ -137,6 +137,12 @@ App.registerView('planificacion-diaria', async () => {
                 t.classList.remove('active');
             }
         });
+
+        // Actualizar Asignaciones Realizadas dinámicamente
+        const asignCont = document.getElementById('asignaciones-realizadas-container');
+        if (asignCont) {
+            asignCont.innerHTML = renderAsignacionesRealizadas();
+        }
     };
     
     // Función para recargar datos del día
@@ -669,13 +675,16 @@ App.registerView('planificacion-diaria', async () => {
 
         const expandido = !!window.asignacionesRealizadasExpandido;
 
-        // Agrupar asignaciones diarias por grupo calculado
+        // Agrupar asignaciones diarias por grupo calculado, filtrando por el grupo activo
         const agrupadas = {};
         planificacionDiaria.forEach(pd => {
             const p = pd.planificacion;
             if (!p) return;
             const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'GENERAL').toUpperCase();
             const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+            
+            if (grupo !== grupoActivo) return; // Filtrar para mostrar solo la categoría/actividad activa
+
             if (!agrupadas[grupo]) agrupadas[grupo] = [];
             agrupadas[grupo].push(pd);
         });
@@ -1262,7 +1271,9 @@ App.registerView('planificacion-diaria', async () => {
             ` : ''}
             
             <!-- Asignaciones Realizadas -->
-            ${renderAsignacionesRealizadas()}
+            <div id="asignaciones-realizadas-container">
+                ${renderAsignacionesRealizadas()}
+            </div>
         </div>
     `;
 

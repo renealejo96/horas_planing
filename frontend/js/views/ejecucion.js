@@ -168,6 +168,12 @@ App.registerView('ejecucion', async () => {
         if (grupo === 'COSECHA') {
             window.sincronizarCosechaApi();
         }
+
+        // Actualizar Historial de Ejecuciones dinámicamente
+        const histCont = document.getElementById('historial-ejecuciones-dinamico');
+        if (histCont) {
+            histCont.innerHTML = renderHistorialEjecuciones(ejecucionesFiltradas);
+        }
     };
 
     window.seleccionarCultivoDiario = (cultivo) => {
@@ -1189,6 +1195,21 @@ App.registerView('ejecucion', async () => {
     const renderHistorialEjecuciones = (ejecsFiltradas) => {
         if (!ejecsFiltradas || ejecsFiltradas.length === 0) return '';
 
+        // Filtrar ejecuciones por el grupo activo
+        const ejecsFiltradasGrupo = ejecsFiltradas.filter(e => {
+            const rawName = (e.planificacion?.actividad?.laborMadre || e.actividad?.laborMadre || 'OTRO').toUpperCase();
+            const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+            return grupo === grupoActivo;
+        });
+
+        if (ejecsFiltradasGrupo.length === 0) {
+            return `
+                <div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.9rem;">
+                    No hay registros de ejecución para la categoría <strong>${grupoActivo}</strong> en esta semana.
+                </div>
+            `;
+        }
+
         const getNombreDiaSemana = (fechaStr) => {
             const diasNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const [y, m, d] = fechaStr.split('-').map(Number);
@@ -1198,7 +1219,7 @@ App.registerView('ejecucion', async () => {
 
         // Agrupar
         const agrupados = {};
-        ejecsFiltradas.forEach(e => {
+        ejecsFiltradasGrupo.forEach(e => {
             const fecha = e.fecha || 'Sin Fecha';
             
             const rawName = (e.planificacion?.actividad?.laborMadre || e.actividad?.laborMadre || 'OTRO').toUpperCase();
