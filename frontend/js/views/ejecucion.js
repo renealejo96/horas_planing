@@ -745,6 +745,7 @@ App.registerView('ejecucion', async () => {
                 </div>
             </div>
         `;
+    };
 
     const renderFueraLaborInput = () => {
         if (!fueraLaborActiva) {
