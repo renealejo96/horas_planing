@@ -704,6 +704,8 @@ App.registerView('ejecucion', async () => {
     };
 
     const renderFueraFilaInput = (laborData, filaId, saved, esAdicional, unidadCodigo = 'CAMAS_HORA', placeholder = 'Camas', index = 1) => {
+        const defaultIdeal = saved.cantidad ? (parseFloat(saved.cantidad) / laborData.rendimiento).toFixed(1) : '';
+        const horasVal = saved.horas !== undefined ? saved.horas : defaultIdeal;
         return `
             <div data-fila="${filaId}" style="display:flex; align-items:center; gap:0.2rem; margin-bottom:0.2rem; padding:0.2rem; background:rgba(255,255,255,0.03); border-radius:4px; border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <div style="font-weight:600; color:var(--text-muted); width:20px; text-align:center; font-size:0.8rem;">${index}</div>
@@ -721,9 +723,13 @@ App.registerView('ejecucion', async () => {
                        placeholder="${placeholder}" oninput="fueraCalcHoras('${filaId}')" onfocus="this.select()"
                        style="width:85px; padding:0.35rem; background:#1E293B; color:white; border-radius:4px; border:1px solid rgba(255,255,255,0.15); font-size:0.9rem; text-align:center; font-weight:700;">
                 
-                <span id="fuera-hrs-${filaId}" style="min-width:55px; font-weight:700; color:${saved.cantidad ? '#10B981' : 'var(--text-muted)'}; text-align:center; font-size:0.85rem; background:rgba(0,0,0,0.15); border-radius:4px; padding:0.35rem 0;">
-                    ${saved.cantidad ? (parseFloat(saved.cantidad) / laborData.rendimiento).toFixed(2) + 'h' : '--'}
-                </span>
+                <input type="number" step="0.1" class="fuera-inp-horas" data-fila="${filaId}" value="${horasVal}"
+                       placeholder="Horas" onfocus="this.select()"
+                       style="width:70px; padding:0.35rem; background:#1E293B; color:#10B981; border-radius:4px; border:1px solid rgba(255,255,255,0.15); font-size:0.9rem; text-align:center; font-weight:700;">
+
+                <div style="min-width:60px; font-size:0.7rem; text-align:center; color:var(--text-muted);">
+                    <span id="fuera-hrs-ideal-${filaId}">${saved.cantidad ? 'Idl: ' + (parseFloat(saved.cantidad) / laborData.rendimiento).toFixed(1) + 'h' : 'Idl: --'}</span>
+                </div>
 
                 <div style="display:flex; gap:0.2rem; margin-left: 0.2rem;">
                     ${!esAdicional ? 
@@ -739,7 +745,6 @@ App.registerView('ejecucion', async () => {
                 </div>
             </div>
         `;
-    };
 
     const renderFueraLaborInput = () => {
         if (!fueraLaborActiva) {
@@ -815,10 +820,12 @@ App.registerView('ejecucion', async () => {
         document.querySelectorAll('#fuera-labor-input div[data-fila]').forEach(row => {
             const filaId = row.dataset.fila;
             const inp = row.querySelector('.fuera-inp-cantidad');
+            const inpHrs = row.querySelector('.fuera-inp-horas');
             const sel = row.querySelector('.fuera-sel-bloque');
             if (inp && filaId) {
                 fueraFilasData[filaId] = {
                     cantidad: inp.value || '',
+                    horas: inpHrs ? inpHrs.value : '',
                     bloque: sel ? sel.value : ''
                 };
             }
@@ -892,18 +899,23 @@ App.registerView('ejecucion', async () => {
     };
 
     window.fueraCalcHoras = (filaId) => {
-        const inp = document.querySelector(`.fuera-inp-cantidad[data-fila="${filaId}"]`);
-        const span = document.getElementById(`fuera-hrs-${filaId}`);
-        const cantidad = parseFloat(inp.value) || 0;
-        const rend = parseFloat(inp.dataset.rend) || 1;
+        const inpCant = document.querySelector(`.fuera-inp-cantidad[data-fila="${filaId}"]`);
+        const inpHrs = document.querySelector(`.fuera-inp-horas[data-fila="${filaId}"]`);
+        const spanIdeal = document.getElementById(`fuera-hrs-ideal-${filaId}`);
+        
+        const cantidad = parseFloat(inpCant.value) || 0;
+        const rend = parseFloat(inpCant.dataset.rend) || 1;
         
         if (cantidad > 0) {
-            let horas = cantidad / rend;
-            span.textContent = horas.toFixed(2) + 'h';
-            span.style.color = '#10B981';
+            const horasIdeales = cantidad / rend;
+            spanIdeal.textContent = 'Idl: ' + horasIdeales.toFixed(1) + 'h';
+            
+            // Si el input de horas reales está vacío, lo autorrellenamos con las horas ideales como sugerencia
+            if (!inpHrs.value) {
+                inpHrs.value = horasIdeales.toFixed(1);
+            }
         } else {
-            span.textContent = '--';
-            span.style.color = 'var(--text-muted)';
+            spanIdeal.textContent = 'Idl: --';
         }
     };
 
@@ -917,9 +929,11 @@ App.registerView('ejecucion', async () => {
         for (const fila of todasLasFilas) {
             const filaId = fila.dataset.fila;
             const inp = fila.querySelector('.fuera-inp-cantidad');
+            const inpHrs = fila.querySelector('.fuera-inp-horas');
             const sel = fila.querySelector('.fuera-sel-bloque');
             const cantidad = parseFloat(inp?.value) || 0;
             const bloque = sel?.value || '';
+            const horasReales = parseFloat(inpHrs?.value) || 0;
             
             if (cantidad <= 0) continue;
             
@@ -932,12 +946,17 @@ App.registerView('ejecucion', async () => {
                 return;
             }
             
-            let horas;
+            if (horasReales <= 0) {
+                showNotification('Las horas reales deben ser mayores a 0.', 'warning');
+                return;
+            }
+            
+            let horasPlanificacion;
             if (esCosechaGroup) {
                 const tallosMalla = TALLOS_POR_MALLA[fueraCultivoActivo] || 25;
-                horas = (cantidad / tallosMalla) / rend;
+                horasPlanificacion = (cantidad / tallosMalla) / rend;
             } else {
-                horas = cantidad / rend;
+                horasPlanificacion = cantidad / rend;
             }
             
             itemsToSave.push({
@@ -945,7 +964,8 @@ App.registerView('ejecucion', async () => {
                 bloque: bloque || null,
                 unidades: cantidad,
                 rendimiento: rend,
-                horas: horas
+                horasPlanificacion: horasPlanificacion,
+                horasReales: horasReales
             });
         }
         
@@ -970,8 +990,8 @@ App.registerView('ejecucion', async () => {
                     valvulas: esFerti ? item.bloque : null,
                     unidadesPlanificadas: item.unidades,
                     rendimientoUsado: item.rendimiento,
-                    horasCalculadas: item.horas,
-                    horasAjustadas: item.horas
+                    horasCalculadas: item.horasPlanificacion,
+                    horasAjustadas: item.horasPlanificacion
                 });
                 
                 // 2. Crear asignación diaria (planificación diaria)
@@ -979,9 +999,21 @@ App.registerView('ejecucion', async () => {
                     await api.crearPlanDiario({
                         planificacionId: newPlan.id,
                         fecha: fechaSeleccionada,
-                        horasAsignadas: item.horas,
+                        horasAsignadas: item.horasPlanificacion,
                         unidadesAsignadas: item.unidades,
                         observacion: '[IMPREVISTO]'
+                    });
+
+                    // 3. Registrar la ejecución real inmediatamente
+                    const rendimientoReal = item.unidades / item.horasReales;
+                    await api.createEjecucion({
+                        planificacion: { id: newPlan.id },
+                        semana: { id: semanaActual.id },
+                        fecha: fechaSeleccionada,
+                        horasReales: item.horasReales,
+                        unidadesReales: item.unidades,
+                        rendimientoReal: rendimientoReal,
+                        observacion: '[EJECUCION IMPREVISTA]'
                     });
                 }
                 guardados++;
