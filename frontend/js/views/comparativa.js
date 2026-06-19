@@ -102,6 +102,44 @@ App.registerView('comparativa', async () => {
             showNotification('Error cargando datos del día', 'error');
         }
     };
+
+    // Función para alternar visualización de los bloques de una actividad en la comparativa
+    window.toggleDetalleComparativa = (rowId) => {
+        const row = document.getElementById(rowId);
+        const icon = document.getElementById('icon-' + rowId);
+        if (row) {
+            const isHidden = row.style.display === 'none';
+            row.style.display = isHidden ? 'table-row' : 'none';
+            if (icon) {
+                if (isHidden) {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                } else {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                }
+            }
+        }
+    };
+
+    // Función para alternar visualización de todo el grupo de Actividad Madre
+    window.toggleGrupoComparativa = (grupoId) => {
+        const element = document.getElementById(grupoId);
+        const icon = document.getElementById('icon-group-' + grupoId);
+        if (element) {
+            const isHidden = element.style.display === 'none';
+            element.style.display = isHidden ? 'block' : 'none';
+            if (icon) {
+                if (isHidden) {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                } else {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                }
+            }
+        }
+    };
     
     // Función para determinar color de variación
     const getVariacionColor = (porcentaje) => {
@@ -384,19 +422,14 @@ App.registerView('comparativa', async () => {
             const items = porGrupo[grupo];
             const unitName = grupo === 'COSECHA' ? 'U.' : 'Camas';
             
-            // Ordenar items por cultivo y luego actividad
-            items.sort((a, b) => {
-                const cultA = (a.actividad?.producto?.nombre || '').toUpperCase();
-                const cultB = (b.actividad?.producto?.nombre || '').toUpperCase();
-                if (cultA !== cultB) return cultA.localeCompare(cultB);
-                return (a.actividad?.nombre || '').localeCompare(b.actividad?.nombre || '');
-            });
-
-            // Totales de grupo en Camas o Unidades (según corresponda)
-            let totUPlan = 0;
-            let totUReal = 0;
-            
+            // Agrupar items por Actividad + Cultivo para hacer la tabla dinámica (colapsable)
+            const porActividadCultivo = {};
             items.forEach(p => {
+                const actId = p.actividad?.id || 0;
+                const actNombre = p.actividad?.nombre || 'GENERAL';
+                const cultivo = p.actividad?.producto?.nombre || 'GENERAL';
+                const key = `${actId}_${cultivo}`;
+
                 let uPlan = p.unidadesPlanificadas || 0;
                 let uReal = p.unidadesEjecutadas || 0;
                 
@@ -406,9 +439,47 @@ App.registerView('comparativa', async () => {
                     uPlan = convertToCamas(uPlan, unidadCodigo, p.actividad?.producto);
                     uReal = convertToCamas(uReal, unidadCodigo, p.actividad?.producto);
                 }
-                
-                totUPlan += uPlan;
-                totUReal += uReal;
+
+                if (!porActividadCultivo[key]) {
+                    porActividadCultivo[key] = {
+                        key: key,
+                        actNombre: actNombre,
+                        cultNombre: cultivo,
+                        unidadesPlanificadas: 0,
+                        unidadesEjecutadas: 0,
+                        horasPlanificadas: 0,
+                        horasEjecutadas: 0,
+                        bloques: []
+                    };
+                }
+
+                const entry = porActividadCultivo[key];
+                entry.unidadesPlanificadas += uPlan;
+                entry.unidadesEjecutadas += uReal;
+                entry.horasPlanificadas += (p.horasAjustadas || p.horasCalculadas || 0);
+                entry.horasEjecutadas += (p.horasEjecutadas || 0);
+                entry.bloques.push({
+                    id: p.id,
+                    bloque: p.bloque || p.valvulas || '-',
+                    uPlan: uPlan,
+                    uReal: uReal,
+                    hPlan: p.horasAjustadas || p.horasCalculadas || 0,
+                    hReal: p.horasEjecutadas || 0
+                });
+            });
+
+            // Convertir objeto agrupado a lista y ordenar por Cultivo y luego Actividad
+            const gruposActividadCultivo = Object.values(porActividadCultivo).sort((a, b) => {
+                if (a.cultNombre !== b.cultNombre) return a.cultNombre.localeCompare(b.cultNombre);
+                return a.actNombre.localeCompare(b.actNombre);
+            });
+
+            // Totales de grupo en Camas o Unidades (según corresponda)
+            let totUPlan = 0;
+            let totUReal = 0;
+            gruposActividadCultivo.forEach(entry => {
+                totUPlan += entry.unidadesPlanificadas;
+                totUReal += entry.unidadesEjecutadas;
             });
             
             const pctUCumpl = totUPlan > 0 ? (totUReal / totUPlan) * 100 : 0;
@@ -417,13 +488,21 @@ App.registerView('comparativa', async () => {
             const totHReal = items.reduce((s, p) => s + (p.horasEjecutadas || 0), 0);
             const difHoras = totHPlan - totHReal;
 
+            const containerId = `grupo-tbl-${grupo.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
             return `
                 <div style="margin-bottom:1.5rem; background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.08); border-radius:12px; overflow:hidden;">
-                    <!-- Cabecera Actividad Madre -->
-                    <div style="padding:0.8rem 1.2rem; background:rgba(59,130,246,0.06); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); flex-wrap:wrap; gap:0.5rem;">
-                        <h4 style="color:var(--primary); text-transform:uppercase; font-size:0.95rem; font-weight:800; margin:0; letter-spacing:0.5px;">
-                            ${grupo}
-                        </h4>
+                    <!-- Cabecera Actividad Madre (Colapsable) -->
+                    <div onclick="toggleGrupoComparativa('${containerId}')" 
+                         style="padding:0.8rem 1.2rem; background:rgba(59,130,246,0.06); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); flex-wrap:wrap; gap:0.5rem; cursor:pointer; user-select:none; transition: background 0.2s;"
+                         onmouseover="this.style.background='rgba(59,130,246,0.1)'"
+                         onmouseout="this.style.background='rgba(59,130,246,0.06)'">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <i id="icon-group-${containerId}" class="fa-solid fa-chevron-down" style="color:var(--primary); font-size:0.85rem; transition: transform 0.2s;"></i>
+                            <h4 style="color:var(--primary); text-transform:uppercase; font-size:0.95rem; font-weight:800; margin:0; letter-spacing:0.5px;">
+                                ${grupo}
+                            </h4>
+                        </div>
                         <div style="display:flex; gap:1rem; font-size:0.8rem;">
                             <span style="color:var(--text-muted);">
                                 Cumplimiento Físico: 
@@ -441,12 +520,12 @@ App.registerView('comparativa', async () => {
                     </div>
 
                     <!-- Tabla de items -->
-                    <div style="overflow-x:auto;">
+                    <div id="${containerId}" style="overflow-x:auto; display:block;">
                         <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
                             <thead style="background:rgba(0,0,0,0.2); color:var(--text-muted); text-transform:uppercase; font-size:0.65rem; letter-spacing:0.5px;">
                                 <tr>
+                                    <th style="padding:0.75rem 1rem; width: 40px; text-align:center;">Det</th>
                                     <th style="padding:0.75rem 1rem;">Actividad / Variedad</th>
-                                    <th style="padding:0.75rem; text-align:center;">Bloque</th>
                                     <th style="padding:0.75rem; text-align:right;">${unitName} Planificadas</th>
                                     <th style="padding:0.75rem; text-align:right;">${unitName} Ejecutadas</th>
                                     <th style="padding:0.75rem; text-align:right;">Horas Plan</th>
@@ -456,36 +535,31 @@ App.registerView('comparativa', async () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${items.map(p => {
-                                    let uPlan = p.unidadesPlanificadas || 0;
-                                    let uReal = p.unidadesEjecutadas || 0;
+                                ${gruposActividadCultivo.map((entry, index) => {
+                                    const rowId = `row-det-${containerId}-${index}`;
                                     
-                                    if (grupo !== 'COSECHA') {
-                                        const rend = rendimientosGlobales.find(r => r.actividad?.id === p.actividad?.id && (!p.actividad?.producto || r.producto?.id === p.actividad?.producto?.id));
-                                        const unidadCodigo = rend?.unidad?.codigo || 'CAMAS_HORA';
-                                        uPlan = convertToCamas(uPlan, unidadCodigo, p.actividad?.producto);
-                                        uReal = convertToCamas(uReal, unidadCodigo, p.actividad?.producto);
-                                    }
-                                    
-                                    const pct = uPlan > 0 ? (uReal / uPlan) * 100 : 0;
+                                    const pct = entry.unidadesPlanificadas > 0 ? (entry.unidadesEjecutadas / entry.unidadesPlanificadas) * 100 : 0;
                                     const colorPct = pct >= 100 ? '#10B981' : pct >= 80 ? '#F59E0B' : pct >= 50 ? '#3B82F6' : '#94A3B8';
                                     
-                                    const hPlan = p.horasAjustadas || p.horasCalculadas || 0;
-                                    const hReal = p.horasEjecutadas || 0;
+                                    const hPlan = entry.horasPlanificadas;
+                                    const hReal = entry.horasEjecutadas;
                                     const hDiff = hPlan - hReal;
 
-                                    const actNombre = p.actividad?.nombre || 'GENERAL';
-                                    const cultivo = p.actividad?.producto?.nombre || 'GENERAL';
-                                    
                                     return `
-                                        <tr style="border-top:1px solid rgba(255,255,255,0.03); transition:background 0.2s;">
-                                            <td style="padding:0.7rem 1rem; color:white;">
-                                                <strong>${actNombre}</strong><br>
-                                                <small style="color:var(--text-muted); font-size:0.75rem;">${cultivo}</small>
+                                        <!-- Fila de Resumen (Master) -->
+                                        <tr onclick="toggleDetalleComparativa('${rowId}')" 
+                                            style="border-top:1px solid rgba(255,255,255,0.03); transition:background 0.2s; cursor:pointer; user-select:none;"
+                                            onmouseover="this.style.background='rgba(255,255,255,0.02)'"
+                                            onmouseout="this.style.background='transparent'">
+                                            <td style="padding:0.7rem 1rem; text-align:center;">
+                                                <i id="icon-${rowId}" class="fa-solid fa-chevron-right" style="color:var(--text-muted); font-size:0.75rem; transition: transform 0.2s;"></i>
                                             </td>
-                                            <td style="padding:0.7rem; text-align:center; color:white;">${p.bloque || p.valvulas || '-'}</td>
-                                            <td style="padding:0.7rem; text-align:right;">${formatQuantity(uPlan)}</td>
-                                            <td style="padding:0.7rem; text-align:right; font-weight:600; color:${uReal > 0 ? 'white' : 'var(--text-muted)'};">${formatQuantity(uReal)}</td>
+                                            <td style="padding:0.7rem 1rem; color:white;">
+                                                <strong>${entry.actNombre}</strong><br>
+                                                <small style="color:var(--text-muted); font-size:0.75rem;">${entry.cultNombre}</small>
+                                            </td>
+                                            <td style="padding:0.7rem; text-align:right;">${formatQuantity(entry.unidadesPlanificadas)}</td>
+                                            <td style="padding:0.7rem; text-align:right; font-weight:600; color:${entry.unidadesEjecutadas > 0 ? 'white' : 'var(--text-muted)'};">${formatQuantity(entry.unidadesEjecutadas)}</td>
                                             <td style="padding:0.7rem; text-align:right;">${hPlan.toFixed(1)}h</td>
                                             <td style="padding:0.7rem; text-align:right;">${hReal.toFixed(1)}h</td>
                                             <td style="padding:0.7rem; text-align:center;">
@@ -496,9 +570,58 @@ App.registerView('comparativa', async () => {
                                                 ` : `<span style="color:var(--text-muted); font-size:0.75rem;">Sin ejecutar</span>`}
                                             </td>
                                             <td style="padding:0.7rem; text-align:center;">
-                                                <span class="badge" style="background:rgba(${uPlan > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.15); color:${uPlan > 0 ? colorPct : '#94A3B8'}; font-weight:bold; border:1px solid rgba(${uPlan > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.3);">
-                                                    ${uPlan > 0 ? `${pct.toFixed(0)}%` : '--'}
+                                                <span class="badge" style="background:rgba(${entry.unidadesPlanificadas > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.15); color:${entry.unidadesPlanificadas > 0 ? colorPct : '#94A3B8'}; font-weight:bold; border:1px solid rgba(${entry.unidadesPlanificadas > 0 ? (pct >= 100 ? '16,185,129' : pct >= 80 ? '245,158,11' : '59,130,246') : '148,163,184'}, 0.3);">
+                                                    ${entry.unidadesPlanificadas > 0 ? `${pct.toFixed(0)}%` : '--'}
                                                 </span>
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- Fila de Detalle Colapsable -->
+                                        <tr id="${rowId}" style="display:none; background:rgba(0,0,0,0.15);">
+                                            <td colspan="8" style="padding:0.5rem 1rem 1rem 3rem;">
+                                                <div style="border-left: 2px solid var(--primary); padding-left: 1rem; margin: 0.25rem 0;">
+                                                    <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.4rem;">
+                                                        Desglose de Bloques
+                                                    </div>
+                                                    <table style="width:100%; border-collapse:collapse; font-size:0.8rem; text-align:left;">
+                                                        <thead>
+                                                            <tr style="color:var(--text-muted); font-size:0.7rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                                                <th style="padding:0.4rem 0.5rem;">Bloque</th>
+                                                                <th style="padding:0.4rem 0.5rem; text-align:right;">${unitName} Planificadas</th>
+                                                                <th style="padding:0.4rem 0.5rem; text-align:right;">${unitName} Ejecutadas</th>
+                                                                <th style="padding:0.4rem 0.5rem; text-align:right;">Horas Plan</th>
+                                                                <th style="padding:0.4rem 0.5rem; text-align:right;">Horas Real</th>
+                                                                <th style="padding:0.4rem 0.5rem; text-align:center;">Diferencia</th>
+                                                                <th style="padding:0.4rem 0.5rem; text-align:center;">% Cumpl.</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            ${entry.bloques.map(b => {
+                                                                const bPct = b.uPlan > 0 ? (b.uReal / b.uPlan) * 100 : 0;
+                                                                const bColorPct = bPct >= 100 ? '#10B981' : bPct >= 80 ? '#F59E0B' : bPct >= 50 ? '#3B82F6' : '#94A3B8';
+                                                                const bDiff = b.hPlan - b.hReal;
+                                                                
+                                                                return `
+                                                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                                                        <td style="padding:0.4rem 0.5rem; font-weight:600; color:white;">${b.bloque}</td>
+                                                                        <td style="padding:0.4rem 0.5rem; text-align:right;">${formatQuantity(b.uPlan)}</td>
+                                                                        <td style="padding:0.4rem 0.5rem; text-align:right; color:${b.uReal > 0 ? 'white' : 'var(--text-muted)'};">${formatQuantity(b.uReal)}</td>
+                                                                        <td style="padding:0.4rem 0.5rem; text-align:right;">${b.hPlan.toFixed(1)}h</td>
+                                                                        <td style="padding:0.4rem 0.5rem; text-align:right;">${b.hReal.toFixed(1)}h</td>
+                                                                        <td style="padding:0.4rem 0.5rem; text-align:center; color:${b.hReal > 0 ? (bDiff >= 0 ? '#10B981' : '#EF4444') : 'var(--text-muted)'};">
+                                                                            ${b.hReal > 0 ? (bDiff >= 0 ? `+${bDiff.toFixed(1)}h` : `${bDiff.toFixed(1)}h`) : '--'}
+                                                                        </td>
+                                                                        <td style="padding:0.4rem 0.5rem; text-align:center;">
+                                                                            <span style="color:${b.uPlan > 0 ? bColorPct : '#94A3B8'}; font-weight:600;">
+                                                                                ${b.uPlan > 0 ? `${bPct.toFixed(0)}%` : '--'}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                `;
+                                                            }).join('')}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </td>
                                         </tr>
                                     `;
