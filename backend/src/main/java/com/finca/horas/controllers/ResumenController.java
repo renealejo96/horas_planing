@@ -33,15 +33,15 @@ public class ResumenController {
         if (codigoAass != null && !codigoAass.trim().isEmpty()) {
             return semanaRepo.findByCodigoAass(codigoAass).orElse(null);
         }
-        // Fallback 1: Semana por fecha actual
-        Optional<Semana> currentByDate = semanaRepo.findByFecha(LocalDate.now(java.time.ZoneId.of("America/Guayaquil")));
-        if (currentByDate.isPresent()) {
-            return currentByDate.get();
-        }
-        // Fallback 2: Semana en estado EN_EJECUCION
+        // Fallback 1: Semana en estado EN_EJECUCION
         List<Semana> enEjecucion = semanaRepo.findByEstado(Semana.EstadoSemana.EN_EJECUCION);
         if (!enEjecucion.isEmpty()) {
             return enEjecucion.get(0);
+        }
+        // Fallback 2: Semana por fecha actual
+        Optional<Semana> currentByDate = semanaRepo.findByFecha(LocalDate.now(java.time.ZoneId.of("America/Guayaquil")));
+        if (currentByDate.isPresent()) {
+            return currentByDate.get();
         }
         // Fallback 3: Última semana registrada
         List<Semana> todas = semanaRepo.findAll();

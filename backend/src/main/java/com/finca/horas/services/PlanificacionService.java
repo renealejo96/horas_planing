@@ -53,6 +53,12 @@ public class PlanificacionService {
     }
     
     public Optional<Semana> obtenerSemanaActual() {
+        // Primero, intentar buscar la que tenga estado EN_EJECUCION
+        List<Semana> enEjecucion = semanaRepo.findByEstado(EstadoSemana.EN_EJECUCION);
+        if (!enEjecucion.isEmpty()) {
+            return Optional.of(enEjecucion.get(0));
+        }
+
         LocalDate hoy = LocalDate.now(java.time.ZoneId.of("America/Guayaquil"));
         Optional<Semana> semana = semanaRepo.findByFecha(hoy);
         
@@ -76,8 +82,22 @@ public class PlanificacionService {
     }
     
     public Optional<Semana> obtenerSemanaSiguiente() {
-        LocalDate hoy = LocalDate.now(java.time.ZoneId.of("America/Guayaquil"));
-        LocalDate proximoLunes = hoy.plusWeeks(1).with(DayOfWeek.MONDAY);
+        // Primero, intentar buscar la que tenga estado PLANIFICACION
+        List<Semana> enPlanificacion = semanaRepo.findByEstado(EstadoSemana.PLANIFICACION);
+        if (!enPlanificacion.isEmpty()) {
+            return Optional.of(enPlanificacion.get(0));
+        }
+
+        // Si no hay ninguna en estado PLANIFICACION, buscamos la siguiente por fecha a la semana actual y la ponemos en PLANIFICACION
+        Optional<Semana> actualOpt = obtenerSemanaActual();
+        LocalDate proximoLunes;
+        if (actualOpt.isPresent()) {
+            proximoLunes = actualOpt.get().getFechaFin().plusDays(1);
+        } else {
+            LocalDate hoy = LocalDate.now(java.time.ZoneId.of("America/Guayaquil"));
+            proximoLunes = hoy.plusWeeks(1).with(DayOfWeek.MONDAY);
+        }
+
         Optional<Semana> semana = semanaRepo.findByFecha(proximoLunes);
         
         if (semana.isEmpty()) {
@@ -154,14 +174,28 @@ public class PlanificacionService {
         return semanaRepo.save(semana);
     }
     
+    @Transactional
     public Optional<Semana> cambiarEstadoSemana(String codigoAass, String estado) {
+        EstadoSemana nuevoEstado = EstadoSemana.valueOf(estado);
         return semanaRepo.findByCodigoAass(codigoAass)
             .map(semana -> {
-                semana.setEstado(EstadoSemana.valueOf(estado));
-                if (estado.equals("PLANIFICACION") || estado.equals("EN_EJECUCION")) {
+                if (nuevoEstado == EstadoSemana.EN_EJECUCION) {
+                    // Buscar todas las semanas que están actualmente EN_EJECUCION y cerrarlas
+                    List<Semana> activas = semanaRepo.findByEstado(EstadoSemana.EN_EJECUCION);
+                    for (Semana activa : activas) {
+                        if (!activa.getCodigoAass().equals(codigoAass)) {
+                            activa.setEstado(EstadoSemana.CERRADA);
+                            activa.setPlanificacionCerrada(true);
+                            semanaRepo.save(activa);
+                        }
+                    }
+                }
+                
+                semana.setEstado(nuevoEstado);
+                if (nuevoEstado == EstadoSemana.PLANIFICACION || nuevoEstado == EstadoSemana.EN_EJECUCION) {
                     semana.setPlanificacionHabilitada(true);
                     semana.setPlanificacionCerrada(false);
-                } else if (estado.equals("CERRADA")) {
+                } else if (nuevoEstado == EstadoSemana.CERRADA) {
                     semana.setPlanificacionCerrada(true);
                 }
                 return semanaRepo.save(semana);

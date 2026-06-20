@@ -524,6 +524,7 @@ const initPlanificacionView = (mode) => { return async () => {
     const renderPlanificacion = () => {
         const itemsFiltrados = getPlanificacionFiltrada();
         const isCosechaGroup = grupoActivo === 'COSECHA';
+        const isClosed = semanaSeleccionada && (semanaSeleccionada.planificacionCerrada || semanaSeleccionada.estado === 'CERRADA');
         
         if (!grupoActivo) {
             return `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">
@@ -555,7 +556,7 @@ const initPlanificacionView = (mode) => { return async () => {
             const subtotalHrs = items.reduce((sum, p) => sum + (p.horasAjustadas || p.horasCalculadas || 0), 0);
             const isExpanded = resumenExpandido[cultivo] === true;
 
-            const btnAdminDelete = user.rol === 'ADMIN' ? `
+            const btnAdminDelete = (user.rol === 'ADMIN' && !isClosed) ? `
                 <button class="btn btn-sm" onclick="event.stopPropagation(); window.eliminarPlanificacionCultivo('${cultivo}')" 
                         style="background:rgba(239, 68, 68, 0.15); color:#FCA5A5; border:1px solid rgba(239, 68, 68, 0.3); padding: 0.2rem 0.5rem; font-size:0.65rem; border-radius:4px; margin-left:0.8rem; cursor:pointer;"
                         title="Eliminar toda la planificación de este cultivo">
@@ -646,10 +647,25 @@ const initPlanificacionView = (mode) => { return async () => {
                             </tr>
                         `;
                     } else {
+                        const checkHtml = isClosed 
+                            ? `<input type="checkbox" disabled style="opacity:0.3;">` 
+                            : `<input type="checkbox" class="plan-row-chk" data-id="${p.id}" onchange="window.actualizarBotonEliminarLote()" style="cursor:pointer;">`;
+                        
+                        const actionsHtml = isClosed 
+                            ? `<div style="display:flex; gap:0.3rem; justify-content:center; color:var(--text-muted); font-size:0.75rem;"><i class="fa-solid fa-lock" title="Planificación cerrada" style="color:var(--text-muted); opacity:0.6;"></i></div>` 
+                            : `<div style="display:flex; gap:0.3rem; justify-content:center;">
+                                    <button class="btn btn-sm" onclick="editarPlan(${p.id})" style="background:rgba(59,130,246,0.1); color:#3B82F6; border:1px solid rgba(59,130,246,0.2); padding:4px 8px;">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button class="btn btn-sm" onclick="eliminarPlan(${p.id})" style="background:rgba(239,68,68,0.1); color:#EF4444; border:1px solid rgba(239,68,68,0.2); padding:4px 8px;">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>`;
+
                         html += `
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
                                 <td style="text-align:center; padding:0.5rem;">
-                                    <input type="checkbox" class="plan-row-chk" data-id="${p.id}" onchange="window.actualizarBotonEliminarLote()" style="cursor:pointer;">
+                                    ${checkHtml}
                                 </td>
                                 <td style="padding:0.5rem; font-size:0.75rem; padding-left: 2rem;">
                                     <strong>${dsc}</strong>
@@ -659,14 +675,7 @@ const initPlanificacionView = (mode) => { return async () => {
                                 <td style="padding:0.5rem; text-align:center; font-size:1rem; font-weight:700; color:#CBD5E1;">${p.unidadesPlanificadas || 0}</td>
                                 <td style="padding:0.5rem; text-align:center;"><span style="color:#93C5FD; font-weight:700; font-size:0.8rem;">${horas.toFixed(1)}h</span></td>
                                 <td style="padding:0.5rem; text-align:center;">
-                                    <div style="display:flex; gap:0.3rem; justify-content:center;">
-                                        <button class="btn btn-sm" onclick="editarPlan(${p.id})" style="background:rgba(59,130,246,0.1); color:#3B82F6; border:1px solid rgba(59,130,246,0.2); padding:4px 8px;">
-                                            <i class="fa-solid fa-pen"></i>
-                                        </button>
-                                        <button class="btn btn-sm" onclick="eliminarPlan(${p.id})" style="background:rgba(239,68,68,0.1); color:#EF4444; border:1px solid rgba(239,68,68,0.2); padding:4px 8px;">
-                                            <i class="fa-solid fa-trash-can"></i>
-                                        </button>
-                                    </div>
+                                    ${actionsHtml}
                                 </td>
                             </tr>
                         `;
@@ -682,11 +691,16 @@ const initPlanificacionView = (mode) => { return async () => {
     // ========== RENDER ENCABEZADO DE TABLA (dinámico según grupo) ==========
     const renderTablaHeader = () => {
         const isCosechaGroup = grupoActivo === 'COSECHA';
+        const isClosed = semanaSeleccionada && (semanaSeleccionada.planificacionCerrada || semanaSeleccionada.estado === 'CERRADA');
+        const chkCol = isClosed 
+            ? '<th style="width: 30px; text-align: center; padding: 0.3rem;"><input type="checkbox" disabled style="opacity:0.3;"></th>' 
+            : `<th style="width: 30px; text-align: center; padding: 0.3rem;">
+                   <input type="checkbox" id="check-all-plan" onchange="window.toggleSelectAllPlan(this)" style="cursor: pointer;">
+               </th>`;
+
         return `
             <tr style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">
-                <th style="width: 30px; text-align: center; padding: 0.3rem;">
-                    <input type="checkbox" id="check-all-plan" onchange="window.toggleSelectAllPlan(this)" style="cursor: pointer;">
-                </th>
+                ${chkCol}
                 <th style="text-align:left; padding:0.3rem;">${isCosechaGroup ? 'Cultivo' : 'Actividad'}</th>
                 <th style="text-align:center; padding:0.3rem;">Blq</th>
                 <th style="text-align:center; padding:0.3rem;">${isCosechaGroup ? 'Tallos' : 'Cant'}</th>
@@ -870,6 +884,28 @@ const initPlanificacionView = (mode) => { return async () => {
         }
     };
 
+    window.autorizarSemanaPlanificada = async (codigoAass) => {
+        if (!confirm(`¿Está seguro de que desea autorizar la planificación de la semana ${codigoAass}? Esta semana pasará a ser la Semana Actual en Ejecución y la semana anterior se cerrará.`)) {
+            return;
+        }
+        
+        try {
+            await api.cambiarEstadoSemana(codigoAass, 'EN_EJECUCION');
+            showNotification(`Semana ${codigoAass} autorizada como semana actual`, 'success');
+            
+            // Forzar recarga de los datos de semana en el layout general de la aplicación
+            if (typeof App.verificarConexionYBadge === 'function') {
+                await App.verificarConexionYBadge();
+            }
+            
+            // Redirigir a la vista de planificacion actual
+            App.navigate('planificacion');
+        } catch (err) {
+            console.error('Error al autorizar semana:', err);
+            showNotification(err.message || 'Error al autorizar la semana', 'error');
+        }
+    };
+
     window.seleccionarGrupo = async (grupo) => {
         guardarValoresActuales();
         grupoActivo = grupo;
@@ -933,6 +969,22 @@ const initPlanificacionView = (mode) => { return async () => {
     
     const renderContenidoLabores = () => {
         const container = document.getElementById('contenido-labores');
+        if (!container) return;
+
+        const isClosed = semanaSeleccionada && (semanaSeleccionada.planificacionCerrada || semanaSeleccionada.estado === 'CERRADA');
+        if (isClosed) {
+            container.innerHTML = `
+                <div style="padding: 2.5rem 1.5rem; text-align: center; color: var(--text-muted);">
+                    <i class="fa-solid fa-lock" style="font-size: 2.5rem; color: #EF4444; margin-bottom: 1rem; opacity: 0.8; display: block;"></i>
+                    <h3 style="color: #F8FAFC; margin-bottom: 0.5rem; font-size: 1.1rem; font-weight: 700;">Planificación de Semana Cerrada</h3>
+                    <p style="font-size: 0.85rem; max-width: 320px; margin: 0 auto; line-height: 1.4;">
+                        Esta planificación ha sido autorizada y está cerrada. No se pueden agregar ni modificar actividades.
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
         if (esCosecha()) {
             container.innerHTML = `
                 <div style="padding:0.5rem 0.75rem; background:linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05)); border-bottom:1px solid rgba(245,158,11,0.3);">
@@ -1349,6 +1401,50 @@ const initPlanificacionView = (mode) => { return async () => {
         </div>
         `;
 
+    const autorizacionHtml = (mode === 'siguiente' && user.rol === 'ADMIN' && semanaSeleccionada) 
+        ? `
+        <div class="card" style="background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(5,150,105,0.15)); border:1px solid rgba(16,185,129,0.4); padding:1.25rem; margin-bottom:0.75rem; border-radius:12px; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:1rem;">
+                <div style="background:rgba(16,185,129,0.2); width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#10B981; font-size:1.5rem;">
+                    <i class="fa-solid fa-file-signature"></i>
+                </div>
+                <div>
+                    <h4 style="margin:0; color:#E5E7EB; font-size:1rem; font-weight:700;">Autorización de Planificación</h4>
+                    <p style="margin:0.25rem 0 0 0; color:var(--text-muted); font-size:0.8rem;">
+                        Autoriza la <strong>Semana ${semanaSeleccionada.codigoAass}</strong> con un total de <strong>${calcularTotalHorasSemana().toFixed(1)}</strong> horas planificadas. Esto la convertirá en la <strong>Semana Actual</strong> en Ejecución y cerrará la semana previa.
+                    </p>
+                </div>
+            </div>
+            <button onclick="window.autorizarSemanaPlanificada('${semanaSeleccionada.codigoAass}')" 
+                style="padding:0.75rem 1.5rem; background:linear-gradient(135deg, #10B981, #059669); color:white; border:none; border-radius:8px; font-weight:700; font-size:0.85rem; cursor:pointer; box-shadow: 0 4px 12px rgba(16,185,129,0.3); text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:0.5rem; transition:transform 0.2s;">
+                <i class="fa-solid fa-circle-check"></i> Autorizar Planificación
+            </button>
+        </div>
+        `
+    const isClosed = semanaSeleccionada && (semanaSeleccionada.planificacionCerrada || semanaSeleccionada.estado === 'CERRADA');
+
+    const actionButtonsHtml = isClosed 
+        ? `
+        <div style="padding:1rem; background:rgba(239,68,68,0.08); border-top:1px dashed rgba(239,68,68,0.25); text-align:center; color:#FCA5A5; font-size:0.85rem; width:100%; border-radius:0 0 12px 12px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+            <i class="fa-solid fa-lock" style="color:#EF4444;"></i> Planificación de la semana está cerrada. No se admiten cambios.
+        </div>
+        `
+        : `
+        <div style="padding:0.75rem; background:rgba(0,0,0,0.2); display:flex; gap:0.5rem; width:100%;">
+            <button id="btn-recalcular" onclick="recalcularPlanificacion()" 
+                style="flex:1; padding:0.75rem; background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.4); 
+                       border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer;">
+                <i class="fa-solid fa-sync" style="margin-right:0.3rem;"></i> Recalcular
+            </button>
+            <button onclick="guardarTodo()" 
+                style="flex:2; padding:0.75rem; background:linear-gradient(135deg, #10B981, #059669); 
+                       color:white; border:none; border-radius:8px; font-size:1rem; font-weight:700; cursor:pointer;
+                       box-shadow: 0 4px 12px rgba(16,185,129,0.4); text-transform:uppercase; letter-spacing:1px;">
+                <i class="fa-solid fa-save" style="margin-right:0.5rem;"></i> Guardar Todo
+            </button>
+        </div>
+        `;
+
     const copyBtnHtml = (mode === 'siguiente' && semanaActual && semanaSiguiente) 
         ? `
         <button id="btn-llenar-siguiente" onclick="llenarPlanSemanaSiguiente()" 
@@ -1362,6 +1458,7 @@ const initPlanificacionView = (mode) => { return async () => {
     return `
         <div class="fade-in ${wrapperClass}">
             ${bannerHtml}
+            ${autorizacionHtml}
             <!-- HEADER CON TOTALES -->
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
                 <div style="display:flex; align-items:center; gap:0.6rem;">
@@ -1398,19 +1495,7 @@ const initPlanificacionView = (mode) => { return async () => {
                 </div>
                 
                 <!-- BOTONES ACCION -->
-                <div style="padding:0.75rem; background:rgba(0,0,0,0.2); display:flex; gap:0.5rem;">
-                    <button id="btn-recalcular" onclick="recalcularPlanificacion()" 
-                        style="flex:1; padding:0.75rem; background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.4); 
-                               border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer;">
-                        <i class="fa-solid fa-sync" style="margin-right:0.3rem;"></i> Recalcular
-                    </button>
-                    <button onclick="guardarTodo()" 
-                        style="flex:2; padding:0.75rem; background:linear-gradient(135deg, #10B981, #059669); 
-                               color:white; border:none; border-radius:8px; font-size:1rem; font-weight:700; cursor:pointer;
-                               box-shadow: 0 4px 12px rgba(16,185,129,0.4); text-transform:uppercase; letter-spacing:1px;">
-                        <i class="fa-solid fa-save" style="margin-right:0.5rem;"></i> Guardar Todo
-                    </button>
-                </div>
+                ${actionButtonsHtml}
             </div>
             
             <!-- PLANIFICACION GUARDADA (FILTRADA POR GRUPO) -->
