@@ -1421,6 +1421,7 @@ const initPlanificacionView = (mode) => { return async () => {
             </button>
         </div>
         `
+        : '';
     const isClosed = semanaSeleccionada && (semanaSeleccionada.planificacionCerrada || semanaSeleccionada.estado === 'CERRADA');
 
     const actionButtonsHtml = isClosed 
