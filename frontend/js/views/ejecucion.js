@@ -169,6 +169,12 @@ App.registerView('ejecucion', async () => {
         if (histWrapper) {
             histWrapper.innerHTML = renderHistorialCardCompleto();
         }
+
+        // Actualizar Tarjeta de Información de Grupo
+        const infoGrupoWrapper = document.getElementById('info-grupo-ejecucion-wrapper');
+        if (infoGrupoWrapper) {
+            infoGrupoWrapper.innerHTML = renderInfoGrupoEjecucion();
+        }
     };
 
     window.seleccionarCultivoDiario = (cultivo) => {
@@ -1562,6 +1568,74 @@ App.registerView('ejecucion', async () => {
         `;
     };
 
+    const renderInfoGrupoEjecucion = () => {
+        if (!grupoActivo) return '';
+
+        // Horas planificadas de la SEMANA para el grupo activo
+        const planGrupoSemana = planificacionItems.filter(p => p && p.grupoCalculado === grupoActivo);
+        const horasPlanGrupoSemana = planGrupoSemana.reduce((sum, p) => sum + (p.horasAjustadas || p.horasCalculadas || 0), 0);
+
+        // Horas ejecutadas de la SEMANA para el grupo activo
+        const ejecsGrupoSemana = ejecuciones.filter(e => {
+            const rawName = (e.planificacion?.actividad?.laborMadre || e.actividad?.laborMadre || 'OTRO').toUpperCase();
+            const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+            return grupo === grupoActivo;
+        });
+        const horasEjecGrupoSemana = ejecsGrupoSemana.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+
+        // Horas ejecutadas de HOY para el grupo activo
+        const horasEjecGrupoHoy = ejecsGrupoSemana
+            .filter(e => e.fecha === fechaSeleccionada)
+            .reduce((sum, e) => sum + (e.horasReales || 0), 0);
+
+        const pctGrupoSemana = horasPlanGrupoSemana > 0 ? Math.min(100, (horasEjecGrupoSemana / horasPlanGrupoSemana) * 100) : 0;
+
+        // Color según el porcentaje de avance
+        const getPctColor = (pct) => {
+            if (pct < 30) return '#EF4444'; // Rojo
+            if (pct < 75) return '#F59E0B'; // Naranja
+            return '#10B981'; // Verde
+        };
+        const activeColor = getPctColor(pctGrupoSemana);
+
+        return `
+            <div id="info-grupo-card" style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8)); border: 1px solid rgba(255, 255, 255, 0.1); padding: 1.25rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.75rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background:rgba(59, 130, 246, 0.15); color:#60A5FA; font-size:1.1rem; border:1px solid rgba(59, 130, 246, 0.25);">
+                            <i class="fa-solid fa-business-time"></i>
+                        </span>
+                        <div>
+                            <h4 style="margin:0; font-size:0.95rem; text-transform:uppercase; color:white; letter-spacing:0.5px;">Resumen de ${grupoActivo}</h4>
+                            <span style="font-size:0.75rem; color:var(--text-muted);">Monitoreo de horas asignadas y avance</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:1rem; align-items:center;">
+                        <div style="text-align:right;">
+                            <span style="font-size:0.75rem; color:var(--text-muted); display:block;">Horas Hoy:</span>
+                            <span style="font-size:1.25rem; font-weight:700; color:#FCD34D;">${horasEjecGrupoHoy.toFixed(1)}h</span>
+                        </div>
+                        <div style="width:1px; height:25px; background:rgba(255,255,255,0.1);"></div>
+                        <div style="text-align:right;">
+                            <span style="font-size:0.75rem; color:var(--text-muted); display:block;">Total Semana:</span>
+                            <span style="font-size:1.25rem; font-weight:700; color:#60A5FA;">${horasEjecGrupoSemana.toFixed(1)}h / ${horasPlanGrupoSemana.toFixed(1)}h</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display:flex; flex-direction:column; gap:0.25rem; margin-top:0.25rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
+                        <span style="color:var(--text-muted);">Avance Semanal de la Labor:</span>
+                        <span style="color:${activeColor}; font-weight:700;">${pctGrupoSemana.toFixed(0)}% Completado</span>
+                    </div>
+                    <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden; border:1px solid rgba(255,255,255,0.03);">
+                        <div style="height:100%; width:${pctGrupoSemana}%; background:linear-gradient(90deg, #3B82F6, ${activeColor}); border-radius:4px; transition:width 0.4s ease-out;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    };
+
     setTimeout(() => {
         configurarNavegacionTecladoEjecucion();
         if (grupoActivo === 'COSECHA') {
@@ -1594,6 +1668,10 @@ App.registerView('ejecucion', async () => {
             </div>
             
             ${renderDiasSemana()}
+
+            <div id="info-grupo-ejecucion-wrapper" style="margin-top: 1rem;">
+                ${renderInfoGrupoEjecucion()}
+            </div>
             
             <!-- Tabla principal de ejecución -->
             <div class="card" style="margin-top:1rem;">
