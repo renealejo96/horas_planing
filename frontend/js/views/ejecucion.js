@@ -158,9 +158,9 @@ App.registerView('ejecucion', async () => {
         }
 
         // Actualizar Historial de Ejecuciones dinámicamente
-        const histCont = document.getElementById('historial-ejecuciones-dinamico');
-        if (histCont) {
-            histCont.innerHTML = renderHistorialEjecuciones(ejecucionesFiltradas);
+        const histWrapper = document.getElementById('historial-ejecuciones-wrapper');
+        if (histWrapper) {
+            histWrapper.innerHTML = renderHistorialCardCompleto();
         }
     };
 
@@ -1511,6 +1511,31 @@ App.registerView('ejecucion', async () => {
     const finFechaSemana = semanaActual?.fechaFin ? semanaActual.fechaFin.split('T')[0] : '';
     const ejecucionesFiltradas = ejecuciones.filter(e => e.fecha === fechaSeleccionada);
 
+    const getEjecucionesFiltradasGrupo = () => {
+        return ejecucionesFiltradas.filter(e => {
+            const rawName = (e.planificacion?.actividad?.laborMadre || e.actividad?.laborMadre || 'OTRO').toUpperCase();
+            const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+            return grupo === grupoActivo;
+        });
+    };
+
+    const renderHistorialCardCompleto = () => {
+        const ejecsFiltradasGrupo = getEjecucionesFiltradasGrupo();
+        if (ejecsFiltradasGrupo.length === 0) return '';
+
+        return `
+            <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
+                <div onclick="window.toggleHistorialGlobal()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
+                    <h3 style="margin:0;"><i class="fa-solid fa-history" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial de Ejecuciones del Día <span class="badge" style="margin-left:0.5rem; background:var(--secondary); color:white;">${ejecsFiltradasGrupo.length}</span></h3>
+                    <i class="fa-solid ${window.historialGlobalExpandido ? 'fa-chevron-up' : 'fa-chevron-down'}" style="color:var(--text-muted);"></i>
+                </div>
+                <div id="historial-ejecuciones-dinamico" style="margin-top:1.5rem; display:${window.historialGlobalExpandido ? 'block' : 'none'};">
+                    ${renderHistorialEjecuciones(ejecucionesFiltradas)}
+                </div>
+            </div>
+        `;
+    };
+
     setTimeout(() => {
         configurarNavegacionTecladoEjecucion();
         if (grupoActivo === 'COSECHA') {
@@ -1641,17 +1666,9 @@ App.registerView('ejecucion', async () => {
             </div>
             
             <!-- Historial -->
-            ${ejecucionesFiltradas.length > 0 ? `
-            <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
-                <div onclick="window.toggleHistorialGlobal()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
-                    <h3 style="margin:0;"><i class="fa-solid fa-history" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial de Ejecuciones del Día <span class="badge" style="margin-left:0.5rem; background:var(--secondary); color:white;">${ejecucionesFiltradas.length}</span></h3>
-                    <i class="fa-solid ${window.historialGlobalExpandido ? 'fa-chevron-up' : 'fa-chevron-down'}" style="color:var(--text-muted);"></i>
-                </div>
-                <div id="historial-ejecuciones-dinamico" style="margin-top:1.5rem; display:${window.historialGlobalExpandido ? 'block' : 'none'};">
-                    ${renderHistorialEjecuciones(ejecucionesFiltradas)}
-                </div>
+            <div id="historial-ejecuciones-wrapper">
+                ${renderHistorialCardCompleto()}
             </div>
-            ` : ''}
         </div>
 
         <!-- MODAL DE EDICIÓN DE EJECUCIONES -->

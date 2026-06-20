@@ -1,5 +1,7 @@
 const API_BASE = '/api';
 
+const apiCache = {};
+
 const api = {
     async request(endpoint, method = 'GET', body = null) {
         try {
@@ -40,24 +42,61 @@ const api = {
             throw error;
         }
     },
+
+    async getCached(key, fetchFn) {
+        if (apiCache[key]) {
+            return apiCache[key];
+        }
+        const data = await fetchFn();
+        apiCache[key] = data;
+        return data;
+    },
+
+    clearCache(key) {
+        if (key) {
+            delete apiCache[key];
+        } else {
+            for (const k in apiCache) {
+                delete apiCache[k];
+            }
+        }
+    },
     
     // ========== Admin / Dashboard ==========
     getDashboard: () => api.request('/admin/dashboard'),
-    getAreas: () => api.request('/admin/areas'),
-    createArea: (data) => api.request('/admin/areas', 'POST', data),
-    updateArea: (id, data) => api.request(`/admin/areas/${id}`, 'PUT', data),
-    getProductos: () => api.request('/admin/productos'),
-    createProducto: (data) => api.request('/admin/productos', 'POST', data),
-    updateProducto: (id, data) => api.request(`/admin/productos/${id}`, 'PUT', data),
+    getAreas: () => api.getCached('areas', () => api.request('/admin/areas')),
+    createArea: async (data) => {
+        api.clearCache('areas');
+        return api.request('/admin/areas', 'POST', data);
+    },
+    updateArea: async (id, data) => {
+        api.clearCache('areas');
+        return api.request(`/admin/areas/${id}`, 'PUT', data);
+    },
+    getProductos: () => api.getCached('productos', () => api.request('/admin/productos')),
+    createProducto: async (data) => {
+        api.clearCache('productos');
+        return api.request('/admin/productos', 'POST', data);
+    },
+    updateProducto: async (id, data) => {
+        api.clearCache('productos');
+        return api.request(`/admin/productos/${id}`, 'PUT', data);
+    },
     getUnidades: () => api.request('/admin/unidades'),
     createUnidad: (data) => api.request('/admin/unidades', 'POST', data),
     updateUnidad: (id, data) => api.request(`/admin/unidades/${id}`, 'PUT', data),
     
     // ========== Actividades ==========
-    getActividades: () => api.request('/admin/actividades'),
+    getActividades: () => api.getCached('actividades', () => api.request('/admin/actividades')),
     getActividadesPorArea: (areaId) => api.request(`/admin/actividades/area/${areaId}`),
-    createActividad: (data) => api.request('/admin/actividades', 'POST', data),
-    updateActividad: (id, data) => api.request(`/admin/actividades/${id}`, 'PUT', data),
+    createActividad: async (data) => {
+        api.clearCache('actividades');
+        return api.request('/admin/actividades', 'POST', data);
+    },
+    updateActividad: async (id, data) => {
+        api.clearCache('actividades');
+        return api.request(`/admin/actividades/${id}`, 'PUT', data);
+    },
     
     // ========== Personal ==========
     getTrabajadores: () => api.request('/personal/trabajadores'),
@@ -104,14 +143,26 @@ const api = {
     deleteEjecucion: (id) => api.request(`/ejecucion/${id}`, 'DELETE'),
     
     // ========== Rendimientos ==========
-    getRendimientos: () => api.request('/admin/rendimientos'),
-    createRendimiento: (data) => api.request('/admin/rendimientos', 'POST', data),
-    updateRendimiento: (id, data) => api.request(`/admin/rendimientos/${id}`, 'PUT', data),
-    deleteRendimiento: (id) => api.request(`/admin/rendimientos/${id}`, 'DELETE'),
+    getRendimientos: () => api.getCached('rendimientos', () => api.request('/admin/rendimientos')),
+    createRendimiento: async (data) => {
+        api.clearCache('rendimientos');
+        api.clearCache('grupos');
+        return api.request('/admin/rendimientos', 'POST', data);
+    },
+    updateRendimiento: async (id, data) => {
+        api.clearCache('rendimientos');
+        api.clearCache('grupos');
+        return api.request(`/admin/rendimientos/${id}`, 'PUT', data);
+    },
+    deleteRendimiento: async (id) => {
+        api.clearCache('rendimientos');
+        api.clearCache('grupos');
+        return api.request(`/admin/rendimientos/${id}`, 'DELETE');
+    },
     importarRendimientosGrupos: () => api.request('/admin/importar-rendimientos-grupos', 'POST'),
     
     // ========== Planificación por GRUPO (Actividad Madre) ==========
-    getGrupos: () => api.request('/planificacion/grupos'),
+    getGrupos: () => api.getCached('grupos', () => api.request('/planificacion/grupos')),
     getRendimientosPorGrupo: (grupo) => api.request(`/planificacion/grupos/${encodeURIComponent(grupo)}/rendimientos`),
     getCultivosPorGrupo: (grupo) => api.request(`/planificacion/grupos/${encodeURIComponent(grupo)}/cultivos`),
     getLaboresPorGrupoCultivo: (grupo, productoCodigo) => api.request(`/planificacion/grupos/${encodeURIComponent(grupo)}/cultivos/${encodeURIComponent(productoCodigo)}/labores`),
