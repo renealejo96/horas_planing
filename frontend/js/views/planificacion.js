@@ -1,4 +1,4 @@
-App.registerView('planificacion', async () => {
+const initPlanificacionView = (mode) => { return async () => {
     // ========== CONSTANTES ==========
     const TALLOS_POR_MALLA = {
         'GYPSOPHILA': 25, 'HYPERICUM': 25, 'VERONICA': 25, 'SOLIDAGO': 25, 'SUNFLOWER': 30, 'Eucalitpos': 25
@@ -36,9 +36,23 @@ App.registerView('planificacion', async () => {
             });
         }
 
-        // Predeterminar siempre la semana actual por solicitud del usuario
-        semanaSeleccionada = semanaActual || semanaSiguiente;
+        // Predeterminar la semana según el modo de planificación
+        if (mode === 'actual') {
+            semanaSeleccionada = semanaActual || semanaSiguiente;
+        } else {
+            semanaSeleccionada = semanaSiguiente || semanaActual;
+        }
         if (semanaSeleccionada) {
+            // Actualizar el título de la página dinámicamente con el código de la semana
+            const titleSpan = document.getElementById('page-title');
+            if (titleSpan) {
+                if (mode === 'actual') {
+                    titleSpan.innerText = `${semanaSeleccionada.codigoAass} Plan Semanal Actual`;
+                } else {
+                    titleSpan.innerText = `${semanaSeleccionada.codigoAass} Planificación Semanal`;
+                }
+            }
+
             planificacionItems = await api.getPlanificacionSemana(semanaSeleccionada.codigoAass).catch(() => []);
             
             // Filtrar planificacionItems por permisos
@@ -106,19 +120,23 @@ App.registerView('planificacion', async () => {
     
     // ========== RENDER SELECTOR DE SEMANAS ==========
     const renderSemanaSelector = () => {
-        const semanas = semanasDisponibles.length ? semanasDisponibles : (semanaActual ? [semanaActual] : []);
-        if (!semanas.length) return `<span style="color:#93C5FD; font-weight:600;">${semanaSeleccionada ? semanaSeleccionada.codigoAass : 'Sin semana'}</span>`;
+        if (!semanaSeleccionada) {
+            return `<span style="color:#EF4444; font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Sin semana definida</span>`;
+        }
+        
+        const label = semanaSeleccionada.codigoAass + (semanaSeleccionada.fechaInicio ? ` (${semanaSeleccionada.fechaInicio})` : '');
+        const isActual = mode === 'actual';
+        const badgeColor = isActual ? '#10B981' : '#818CF8';
+        const bgStyle = isActual ? 'rgba(16,185,129,0.15)' : 'rgba(99,102,241,0.15)';
+        const borderStyle = isActual ? 'rgba(16,185,129,0.3)' : 'rgba(99,102,241,0.3)';
+        const textLabel = isActual ? '★ Semana Actual' : '✦ Semana Siguiente';
+        
         return `
-            <select id="semana-selector-plan" onchange="cambiarSemana(this.value)" 
-                style="padding:0.4rem 0.8rem; background:rgba(59,130,246,0.15); color:#93C5FD; border:1px solid rgba(59,130,246,0.4); 
-                       border-radius:8px; cursor:pointer; font-size:0.85rem; font-weight:600; outline:none;">
-                ${semanas.map(s => {
-                    const sel = semanaSeleccionada && s.codigoAass === semanaSeleccionada.codigoAass ? 'selected' : '';
-                    const label = s.codigoAass + (s.fechaInicio ? ` (${s.fechaInicio})` : '');
-                    const esSemaActual = semanaActual && s.codigoAass === semanaActual.codigoAass;
-                    return `<option value="${s.codigoAass}" ${sel}>${esSemaActual ? '★ ' : ''}${label}</option>`;
-                }).join('')}
-            </select>
+            <div style="padding:0.4rem 0.8rem; background:${bgStyle}; color:${badgeColor}; border:1px solid ${borderStyle}; 
+                       border-radius:8px; font-size:0.85rem; font-weight:700; display:inline-flex; align-items:center; gap:0.4rem;">
+                <i class="fa-solid ${isActual ? 'fa-calendar-check' : 'fa-calendar-plus'}"></i>
+                <span>${textLabel}: <strong>${label}</strong></span>
+            </div>
         `;
     };
 
@@ -723,8 +741,10 @@ App.registerView('planificacion', async () => {
             const res = await api.copiarPlanificacionSemana(semanaActual.codigoAass, semanaSiguiente.codigoAass);
             showNotification(res.mensaje || 'Planificación copiada con éxito', 'success');
             
-            // Cambiar a la semana siguiente para visualizar los cambios
-            await window.cambiarSemana(semanaSiguiente.codigoAass);
+            // Recargar planificación de la semana seleccionada
+            planificacionItems = await api.getPlanificacionSemana(semanaSeleccionada.codigoAass).catch(() => []);
+            document.getElementById('tabla-plan').innerHTML = renderPlanificacion();
+            actualizarContadores();
         } catch (e) {
             console.error(e);
             showNotification(e.message || 'Error al copiar la planificación', 'error');
@@ -1195,23 +1215,39 @@ App.registerView('planificacion', async () => {
     setTimeout(configurarNavegacionTeclado, 100);
     
     // ========== RENDER PRINCIPAL ==========
+    const wrapperClass = mode === 'actual' ? 'plan-semana-actual' : 'plan-semana-siguiente';
+    const bannerHtml = mode === 'actual' 
+        ? `
+        <div class="plan-banner-alerta actual">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Estás planificando la <strong>Semana Actual (${semanaSeleccionada ? semanaSeleccionada.codigoAass : ''})</strong>. Las horas se guardarán en esta semana en curso.</span>
+        </div>
+        `
+        : `
+        <div class="plan-banner-alerta siguiente">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Estás planificando la <strong>Semana Siguiente (${semanaSeleccionada ? semanaSeleccionada.codigoAass : ''})</strong>. Las horas se guardarán en la próxima semana.</span>
+        </div>
+        `;
+
+    const copyBtnHtml = (mode === 'siguiente' && semanaActual && semanaSiguiente) 
+        ? `
+        <button id="btn-llenar-siguiente" onclick="llenarPlanSemanaSiguiente()" 
+            style="padding:0.4rem 0.8rem; background:rgba(99,102,241,0.15); color:#818CF8; border:1px solid rgba(99,102,241,0.4); 
+                   border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:600; outline:none; display:flex; align-items:center; gap:0.3rem;">
+            <i class="fa-solid fa-copy"></i> Copiar Plan de Semana Actual (${semanaActual.codigoAass})
+        </button>
+        ` 
+        : '';
+
     return `
-        <div class="fade-in">
+        <div class="fade-in ${wrapperClass}">
+            ${bannerHtml}
             <!-- HEADER CON TOTALES -->
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
                 <div style="display:flex; align-items:center; gap:0.6rem;">
-                    <span style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Semana:</span>
                     ${renderSemanaSelector()}
-                    ${semanaActual && semanaSeleccionada && semanaActual.codigoAass === semanaSeleccionada.codigoAass
-                        ? '<span style="background:rgba(16,185,129,0.15); color:#10B981; border:1px solid rgba(16,185,129,0.4); border-radius:6px; padding:0.2rem 0.5rem; font-size:0.7rem; font-weight:600;">ACTUAL</span>'
-                        : ''}
-                    ${semanaActual && semanaSiguiente ? `
-                        <button id="btn-llenar-siguiente" onclick="llenarPlanSemanaSiguiente()" 
-                            style="padding:0.4rem 0.8rem; background:rgba(245,158,11,0.15); color:#F59E0B; border:1px solid rgba(245,158,11,0.4); 
-                                   border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:600; outline:none; display:flex; align-items:center; gap:0.3rem;">
-                            <i class="fa-solid fa-copy"></i> Llenar Plan Siguiente (${semanaSiguiente.codigoAass})
-                        </button>
-                    ` : ''}
+                    ${copyBtnHtml}
                 </div>
                 <div style="display:flex; gap:1rem; align-items:center;">
                     <span style="color:#F59E0B; font-weight:600; font-size:0.9rem;">
@@ -1286,4 +1322,8 @@ App.registerView('planificacion', async () => {
             </div>
         </div>
     `;
-});
+  };
+};
+
+App.registerView('planificacion', initPlanificacionView('actual'));
+App.registerView('planificacion-siguiente', initPlanificacionView('siguiente'));

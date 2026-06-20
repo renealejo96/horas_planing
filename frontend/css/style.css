@@ -2091,5 +2091,144 @@ textarea::placeholder {
     }
 }
 
+/* ==========================================================================
+   PLANIFICACION SEMANA SIGUIENTE - CUSTOM VISUALS
+   ========================================================================== */
+
+/* Next Week planning container theme overrides */
+.plan-semana-siguiente {
+    --accent-siguiente: #6366F1; /* Indigo */
+    --accent-siguiente-hover: #4F46E5;
+    --accent-siguiente-glow: rgba(99, 102, 241, 0.3);
+}
+
+/* Overrides for groups (activity mother) tabs */
+.plan-semana-siguiente .grupo-tab.active {
+    background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%) !important; /* purple to indigo */
+    border-color: #8B5CF6 !important;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35) !important;
+}
+
+/* Overrides for cultivation cards */
+.plan-semana-siguiente .cultivo-card.active {
+    border-color: #A855F7 !important; /* Purple */
+    background: #A855F7 !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3) !important;
+}
+
+/* Overrides for labor cards */
+.plan-semana-siguiente .labor-card.active {
+    border-color: #6366F1 !important; /* Indigo */
+    background: #6366F1 !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35) !important;
+}
+.plan-semana-siguiente .labor-card.active span {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Overrides for main CTA buttons (Guardar Todo) */
+.plan-semana-siguiente button[onclick="guardarTodo()"] {
+    background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
+}
+
+/* Overrides for Recalcular button */
+.plan-semana-siguiente #btn-recalcular {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: #C7D2FE !important;
+    border: 1px solid rgba(99, 102, 241, 0.4) !important;
+}
+
+/* Overrides for Cosecha (Amber in actual, Rose/Orange in siguiente) */
+.plan-semana-siguiente .accordion-item {
+    border: 1px solid rgba(236, 72, 153, 0.2) !important; /* Pink/Rose border */
+}
+.plan-semana-siguiente .accordion-header {
+    background: rgba(236, 72, 153, 0.08) !important;
+}
+.plan-semana-siguiente .accordion-header i {
+    color: #EC4899 !important;
+}
+.plan-semana-siguiente .accordion-header span {
+    color: #F8FAFC !important;
+}
+.plan-semana-siguiente .cosecha-row {
+    border: 1px solid rgba(236, 72, 153, 0.15) !important;
+}
+.plan-semana-siguiente .cosecha-row .inp-cantidad {
+    border-color: rgba(236, 72, 153, 0.3) !important;
+}
+.plan-semana-siguiente .cosecha-row .inp-cantidad:focus {
+    border-color: #EC4899 !important;
+}
+.plan-semana-siguiente .cosecha-row button {
+    background: rgba(236, 72, 153, 0.15) !important;
+    color: #F472B6 !important;
+    border: 1px solid rgba(236, 72, 153, 0.3) !important;
+}
+.plan-semana-siguiente .cosecha-row button:hover {
+    background: #EC4899 !important;
+    color: white !important;
+}
+
+/* Content headers dynamic background */
+.plan-semana-siguiente #contenido-labores > div:first-child {
+    background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05)) !important;
+    border-bottom: 1px solid rgba(99,102,241,0.3) !important;
+}
+.plan-semana-siguiente #contenido-labores > div:first-child div {
+    color: #818CF8 !important;
+}
+
+/* Hours calculated texts */
+.plan-semana-siguiente span[id^="hrs-"] {
+    color: #818CF8 !important;
+}
+.plan-semana-siguiente div[data-fila] button[onclick^="guardarFila"] {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: #818CF8 !important;
+    border: 1px solid rgba(99, 102, 241, 0.3) !important;
+}
+.plan-semana-siguiente div[data-fila] button[onclick^="guardarFila"]:hover {
+    background: #6366F1 !important;
+    color: white !important;
+}
+.plan-semana-siguiente div[data-fila] button[onclick^="agregarFilaLabor"] {
+    background: rgba(168, 85, 247, 0.15) !important;
+    color: #C084FC !important;
+    border: 1px solid rgba(168, 85, 247, 0.3) !important;
+}
+.plan-semana-siguiente div[data-fila] button[onclick^="agregarFilaLabor"]:hover {
+    background: #A855F7 !important;
+    color: white !important;
+}
+.plan-semana-siguiente input:focus {
+    border-color: #6366F1 !important;
+}
+
+/* Weekly Plan warning message / banner styling */
+.plan-banner-alerta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+.plan-banner-alerta.actual {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #34D399;
+}
+.plan-banner-alerta.siguiente {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: #A5B4FC;
+}
+
 
 

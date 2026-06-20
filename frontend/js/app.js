@@ -60,7 +60,8 @@ const App = {
             // Set Titles globally
             const titles = {
                 dashboard: 'Dashboard Semanal',
-                planificacion: 'Planificación Semanal',
+                planificacion: 'Plan Semanal Actual',
+                'planificacion-siguiente': 'Plan Semanal Siguiente',
                 'planificacion-diaria': 'Plan Diario',
                 ejecucion: 'Ejecución Diaria',
                 comparativa: 'Comparativa',

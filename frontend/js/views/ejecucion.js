@@ -24,6 +24,7 @@ App.registerView('ejecucion', async () => {
     window.fechaGlobalSeleccionada = fechaSeleccionada;
     
     let cultivoActivoDiario = null;
+    let subActividadActiva = null;
     
     const getCultivosDelGrupo = () => {
         const itemsGrupo = planificacionItems.filter(p => {
@@ -134,9 +135,13 @@ App.registerView('ejecucion', async () => {
         grupoActivo = grupo;
         const cultivos = getCultivosDelGrupo();
         cultivoActivoDiario = cultivos.length > 0 ? cultivos[0].codigo : null;
+        subActividadActiva = null;
         
         const cultCont = document.getElementById('cultivos-ejecucion-container');
         if (cultCont) cultCont.innerHTML = renderCultivoTabsDiario();
+        
+        const subActCont = document.getElementById('subactividades-ejecucion-container');
+        if (subActCont) subActCont.innerHTML = renderSubActividadesTabsDiario();
         
         document.getElementById('grid-container-ejecucion').innerHTML = window.renderPlanificacionParaEjecutar();
         document.querySelectorAll('.grupo-tab-ejecucion').forEach(t => {
@@ -161,9 +166,66 @@ App.registerView('ejecucion', async () => {
 
     window.seleccionarCultivoDiario = (cultivo) => {
         cultivoActivoDiario = cultivo;
+        subActividadActiva = null;
+        
+        const subActCont = document.getElementById('subactividades-ejecucion-container');
+        if (subActCont) subActCont.innerHTML = renderSubActividadesTabsDiario();
+        
         document.getElementById('grid-container-ejecucion').innerHTML = window.renderPlanificacionParaEjecutar();
         document.querySelectorAll('.cultivo-tab-ejecucion').forEach(btn => {
             if (btn.dataset.cultivo === cultivo) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    };
+    
+    const getSubActividadesDelCultivo = () => {
+        const itemsGrupoCultivo = planificacionItems.filter(p => {
+            if (!p || p.grupoCalculado !== grupoActivo) return false;
+            const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
+            return pCultivo === cultivoActivoDiario;
+        });
+        
+        const subActSet = new Set();
+        itemsGrupoCultivo.forEach(p => {
+            if (p.actividad?.nombre) {
+                subActSet.add(p.actividad.nombre);
+            }
+        });
+        return Array.from(subActSet).sort();
+    };
+
+    const renderSubActividadesTabsDiario = () => {
+        if (grupoActivo === 'COSECHA') return '';
+        const subActs = getSubActividadesDelCultivo();
+        if (!subActs.length) return '';
+        
+        return `
+            <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:1px; margin-top: 0.5rem;">Filtrar por Sub-actividad</div>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.2rem;">
+                <button class="labor-card subact-tab-ejecucion ${!subActividadActiva ? 'active' : ''}" onclick="seleccionarSubActividadDiario(null)">
+                    TODAS
+                </button>
+                ${subActs.map(sa => {
+                    const isActive = subActividadActiva === sa ? 'active' : '';
+                    return `
+                        <button class="labor-card subact-tab-ejecucion ${isActive}" data-subact="${sa}" onclick="seleccionarSubActividadDiario('${sa}')">
+                            ${sa}
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    };
+
+    window.seleccionarSubActividadDiario = (subact) => {
+        subActividadActiva = subact;
+        document.getElementById('grid-container-ejecucion').innerHTML = window.renderPlanificacionParaEjecutar();
+        document.querySelectorAll('.subact-tab-ejecucion').forEach(btn => {
+            const isMatch = (subact === null && !btn.dataset.subact) || (btn.dataset.subact === subact);
+            if (isMatch) {
                 btn.classList.add('active');
             } else {
                 btn.classList.remove('active');
@@ -282,14 +344,19 @@ App.registerView('ejecucion', async () => {
             const rowProdCodigo = String(row.dataset.productoCodigo || '').toUpperCase().trim();
             const planId = row.dataset.id;
             
-            if (rowProdCodigo && totalesPorProducto[rowProdCodigo] !== undefined) {
-                const totalCosechado = totalesPorProducto[rowProdCodigo];
+            if (rowProdCodigo) {
                 const unidadesInput = document.getElementById(`unidades-real-${planId}`);
                 
                 if (unidadesInput) {
-                    unidadesInput.value = totalCosechado;
+                    if (totalesPorProducto[rowProdCodigo] !== undefined) {
+                        unidadesInput.value = totalesPorProducto[rowProdCodigo];
+                        unidadesInput.placeholder = "";
+                        matchCount++;
+                    } else {
+                        unidadesInput.value = "";
+                        unidadesInput.placeholder = "Sin tallos";
+                    }
                     calcularRendimientoReal(planId);
-                    matchCount++;
                 }
             }
         });
@@ -1035,6 +1102,8 @@ App.registerView('ejecucion', async () => {
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
             if (grupoActivo !== 'COSECHA' && pCultivo !== cultivoActivoDiario) return false;
             
+            if (grupoActivo !== 'COSECHA' && subActividadActiva && p.actividad?.nombre !== subActividadActiva) return false;
+            
             return true;
         });
 
@@ -1503,6 +1572,9 @@ App.registerView('ejecucion', async () => {
                     </div>
                     <div id="cultivos-ejecucion-container">
                         ${renderCultivoTabsDiario()}
+                    </div>
+                    <div id="subactividades-ejecucion-container">
+                        ${renderSubActividadesTabsDiario()}
                     </div>
                 </div>
                 
