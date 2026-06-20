@@ -18,13 +18,13 @@ App.registerView('ejecucion', async () => {
 
     // Cargar semana en ejecución y su planificación
     let semanaActual = null, planificacionItems = [], ejecuciones = [], areas = [], actividades = [], rendimientos = [], productos = [], fueraGrupos = [];
-    let grupoActivo = null;
+    let grupoActivo = window.ejecucionGrupoActivo || null;
     let gruposUnicos = [];
     let fechaSeleccionada = window.fechaGlobalSeleccionada || fechaHoy;
     window.fechaGlobalSeleccionada = fechaSeleccionada;
     
-    let cultivoActivoDiario = null;
-    let subActividadActiva = null;
+    let cultivoActivoDiario = window.ejecucionCultivoActivo || null;
+    let subActividadActiva = window.ejecucionSubActividadActiva || null;
     
     const getCultivosDelGrupo = () => {
         const itemsGrupo = planificacionItems.filter(p => {
@@ -114,11 +114,15 @@ App.registerView('ejecucion', async () => {
             
             if (gruposUnicos.length > 0 && (!grupoActivo || !gruposUnicos.includes(grupoActivo))) {
                 grupoActivo = gruposUnicos.includes('COSECHA') ? 'COSECHA' : gruposUnicos[0];
+                window.ejecucionGrupoActivo = grupoActivo;
             }
             
             if (grupoActivo) {
                 const cultivos = getCultivosDelGrupo();
-                cultivoActivoDiario = cultivos.length > 0 ? cultivos[0].codigo : null;
+                if (!cultivoActivoDiario || !cultivos.some(c => c.codigo === cultivoActivoDiario)) {
+                    cultivoActivoDiario = cultivos.length > 0 ? cultivos[0].codigo : null;
+                    window.ejecucionCultivoActivo = cultivoActivoDiario;
+                }
             }
         }
     } catch (e) {
@@ -133,9 +137,12 @@ App.registerView('ejecucion', async () => {
     // Función para cambiar el grupo sin recargar todo
     window.seleccionarGrupoEjecucion = (grupo) => {
         grupoActivo = grupo;
+        window.ejecucionGrupoActivo = grupo;
         const cultivos = getCultivosDelGrupo();
         cultivoActivoDiario = cultivos.length > 0 ? cultivos[0].codigo : null;
+        window.ejecucionCultivoActivo = cultivoActivoDiario;
         subActividadActiva = null;
+        window.ejecucionSubActividadActiva = null;
         
         const cultCont = document.getElementById('cultivos-ejecucion-container');
         if (cultCont) cultCont.innerHTML = renderCultivoTabsDiario();
@@ -166,7 +173,9 @@ App.registerView('ejecucion', async () => {
 
     window.seleccionarCultivoDiario = (cultivo) => {
         cultivoActivoDiario = cultivo;
+        window.ejecucionCultivoActivo = cultivo;
         subActividadActiva = null;
+        window.ejecucionSubActividadActiva = null;
         
         const subActCont = document.getElementById('subactividades-ejecucion-container');
         if (subActCont) subActCont.innerHTML = renderSubActividadesTabsDiario();
@@ -205,8 +214,8 @@ App.registerView('ejecucion', async () => {
         return `
             <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:1px; margin-top: 0.5rem;">Filtrar por Sub-actividad</div>
             <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.2rem;">
-                <button class="labor-card subact-tab-ejecucion ${!subActividadActiva ? 'active' : ''}" onclick="seleccionarSubActividadDiario(null)">
-                    TODAS
+                <button class="labor-card subact-tab-ejecucion ${subActividadActiva === 'TODAS' ? 'active' : ''}" onclick="seleccionarSubActividadDiario('TODAS')">
+                    VER TODAS
                 </button>
                 ${subActs.map(sa => {
                     const isActive = subActividadActiva === sa ? 'active' : '';
@@ -222,9 +231,10 @@ App.registerView('ejecucion', async () => {
 
     window.seleccionarSubActividadDiario = (subact) => {
         subActividadActiva = subact;
+        window.ejecucionSubActividadActiva = subact;
         document.getElementById('grid-container-ejecucion').innerHTML = window.renderPlanificacionParaEjecutar();
         document.querySelectorAll('.subact-tab-ejecucion').forEach(btn => {
-            const isMatch = (subact === null && !btn.dataset.subact) || (btn.dataset.subact === subact);
+            const isMatch = (subact === 'TODAS' && !btn.dataset.subact) || (btn.dataset.subact === subact);
             if (isMatch) {
                 btn.classList.add('active');
             } else {
@@ -1096,13 +1106,24 @@ App.registerView('ejecucion', async () => {
     
     // Renderizar tabla de ejecución DIARIA (basada en el plan semanal y ejecuciones)
     window.renderPlanificacionParaEjecutar = () => {
+        if (grupoActivo !== 'COSECHA' && !subActividadActiva) {
+            return `
+                <tr>
+                    <td colspan="11" style="text-align:center; color:var(--text-muted); padding:3rem;">
+                        <i class="fa-solid fa-hand-pointer" style="font-size:2rem; margin-bottom:0.5rem; display:block; opacity:0.5; color:var(--primary);"></i>
+                        Selecciona una sub-actividad arriba para empezar a registrar
+                    </td>
+                </tr>
+            `;
+        }
+
         const elementosParaMostrar = planificacionItems.filter(p => {
             if (!p || p.grupoCalculado !== grupoActivo) return false;
             
             const pCultivo = (p.producto || p.actividad?.producto)?.codigo || 'GENERAL';
             if (grupoActivo !== 'COSECHA' && pCultivo !== cultivoActivoDiario) return false;
             
-            if (grupoActivo !== 'COSECHA' && subActividadActiva && p.actividad?.nombre !== subActividadActiva) return false;
+            if (grupoActivo !== 'COSECHA' && subActividadActiva && subActividadActiva !== 'TODAS' && p.actividad?.nombre !== subActividadActiva) return false;
             
             return true;
         });
@@ -1380,6 +1401,11 @@ App.registerView('ejecucion', async () => {
                 const cultivosOrdenados = Object.keys(cultivos).sort();
                 cultivosOrdenados.forEach(cultivo => {
                     const ejecs = cultivos[cultivo];
+                    const ejecsOrdenadas = [...ejecs].sort((a, b) => {
+                        const nameA = (a.planificacion?.actividad?.nombre || a.actividad?.nombre || '').toUpperCase();
+                        const nameB = (b.planificacion?.actividad?.nombre || b.actividad?.nombre || '').toUpperCase();
+                        return nameA.localeCompare(nameB);
+                    });
                     htmlDia += `
                         <div style="margin-bottom:0.5rem; margin-left:0.5rem;">
                             <h5 style="color:#F59E0B; font-size:0.8rem; font-weight:700; margin-bottom:0.3rem;">
@@ -1399,7 +1425,7 @@ App.registerView('ejecucion', async () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${ejecs.map(e => {
+                                    ${ejecsOrdenadas.map(e => {
                                         const esImprevisto = !e.planificacion && e.observacion?.includes('[IMPREVISTO]');
                                         const actNombre = e.planificacion?.actividad?.nombre || e.actividad?.nombre || '-';
                                         const bloqueStr = e.planificacion?.bloque || e.planificacion?.valvulas || '-';
