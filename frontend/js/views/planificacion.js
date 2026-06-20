@@ -15,6 +15,7 @@ const initPlanificacionView = (mode) => { return async () => {
     let editandoId = null;
     let cosechaExpandido = false; // Estado para formulario COSECHA colapsable
     let resumenExpandido = {}; // Estado para acordeones en el resumen semanal
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
     
     // ========== CARGAR DATOS INICIALES ==========
     let semanasDisponibles = [];
@@ -27,7 +28,6 @@ const initPlanificacionView = (mode) => { return async () => {
         ]);
         
         // Filtrar grupos por permisos de usuario
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
         if (user.rol !== 'ADMIN') {
             const permitidas = (user.actividadesPermitidas || '').split(',').map(s => s.trim().toUpperCase());
             grupos = grupos.filter(g => {
