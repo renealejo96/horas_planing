@@ -56,6 +56,8 @@ public class PlanificacionService {
         // Primero, intentar buscar la que tenga estado EN_EJECUCION
         List<Semana> enEjecucion = semanaRepo.findByEstado(EstadoSemana.EN_EJECUCION);
         if (!enEjecucion.isEmpty()) {
+            // Ordenar de forma descendente por codigoAass para obtener la más reciente en caso de inconsistencia
+            enEjecucion.sort((a, b) -> b.getCodigoAass().compareTo(a.getCodigoAass()));
             return Optional.of(enEjecucion.get(0));
         }
 
@@ -85,6 +87,8 @@ public class PlanificacionService {
         // Primero, intentar buscar la que tenga estado PLANIFICACION
         List<Semana> enPlanificacion = semanaRepo.findByEstado(EstadoSemana.PLANIFICACION);
         if (!enPlanificacion.isEmpty()) {
+            // Ordenar de forma descendente por codigoAass para obtener la más reciente en caso de inconsistencia
+            enPlanificacion.sort((a, b) -> b.getCodigoAass().compareTo(a.getCodigoAass()));
             return Optional.of(enPlanificacion.get(0));
         }
 
