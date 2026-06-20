@@ -1540,6 +1540,7 @@ App.registerView('ejecucion', async () => {
                 </div>
             `;
             return htmlDia;
+        }).join('');
     };
 
     // ========== NAVEGACION CON TECLADO EJECUCION ==========
