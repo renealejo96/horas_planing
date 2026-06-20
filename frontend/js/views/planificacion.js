@@ -78,14 +78,22 @@ const initPlanificacionView = (mode) => { return async () => {
     
     const esCosecha = () => grupoActivo === 'COSECHA';
     
-    // Filtrar planificacion por grupo activo (usando laborMadre de la actividad)
+    // Filtrar planificacion por grupo activo y cultivo activo
     const getPlanificacionFiltrada = () => {
         if (!grupoActivo) return [];
         return planificacionItems.filter(p => {
             // Usar laborMadre si existe, sino buscar en nombre
             const laborMadre = (p.actividad?.laborMadre || '').toUpperCase();
             const actNombre = (p.actividad?.nombre || '').toUpperCase();
-            return laborMadre === grupoActivo || actNombre.includes(grupoActivo);
+            const coincideGrupo = laborMadre === grupoActivo || actNombre.includes(grupoActivo);
+            if (!coincideGrupo) return false;
+            
+            if (grupoActivo !== 'COSECHA' && cultivoActivo) {
+                const pdcto = p.producto || p.actividad?.producto;
+                const pCultivo = (pdcto?.codigo || pdcto?.nombre || 'GENERAL').toUpperCase();
+                return pCultivo === cultivoActivo.toUpperCase();
+            }
+            return true;
         });
     };
     
@@ -430,19 +438,102 @@ const initPlanificacionView = (mode) => { return async () => {
     };
     
     // ========== RENDER PLANIFICACION CON EDICION (AGRUPADA POR CULTIVO) ==========
+    window.toggleSelectAllPlan = (chk) => {
+        const selectAll = chk.checked;
+        document.querySelectorAll('.plan-row-chk').forEach(c => {
+            c.checked = selectAll;
+        });
+        window.actualizarBotonEliminarLote();
+    };
+
+    window.actualizarBotonEliminarLote = () => {
+        const checkedBoxes = document.querySelectorAll('.plan-row-chk:checked');
+        const btn = document.getElementById('btn-eliminar-lote');
+        const countSpan = document.getElementById('count-eliminar-lote');
+        if (btn && countSpan) {
+            if (checkedBoxes.length > 0) {
+                btn.style.display = 'inline-flex';
+                countSpan.textContent = checkedBoxes.length;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+    };
+
+    window.eliminarPlanificacionLote = async () => {
+        const checkedBoxes = document.querySelectorAll('.plan-row-chk:checked');
+        if (!checkedBoxes.length) return;
+        
+        if (!confirm(`¿Estás seguro de que deseas eliminar los ${checkedBoxes.length} registros seleccionados?`)) {
+            return;
+        }
+        
+        const ids = Array.from(checkedBoxes).map(c => parseInt(c.dataset.id));
+        
+        const btnLote = document.getElementById('btn-eliminar-lote');
+        if (btnLote) btnLote.disabled = true;
+        
+        showNotification(`Eliminando ${ids.length} registros...`, 'info');
+        try {
+            await Promise.all(ids.map(id => api.deletePlanificacion(id)));
+            showNotification(`✓ ${ids.length} registros eliminados correctamente`, 'success');
+            
+            if (mode === 'actual') {
+                App.navigate('planificacion');
+            } else {
+                App.navigate('planificacion-siguiente');
+            }
+        } catch (err) {
+            showNotification('Error al eliminar planificación en lote', 'error');
+            if (btnLote) btnLote.disabled = false;
+        }
+    };
+
+    window.eliminarPlanificacionCultivo = async (cultivoNombre) => {
+        const itemsFiltrados = getPlanificacionFiltrada();
+        const itemsCultivo = itemsFiltrados.filter(p => {
+            const pdcto = p.producto || p.actividad?.producto;
+            const cName = pdcto ? pdcto.nombre : 'General';
+            return cName.toUpperCase() === cultivoNombre.toUpperCase();
+        });
+        
+        if (!itemsCultivo.length) return;
+        
+        if (!confirm(`¿ADMIN: Estás seguro de que deseas eliminar TODOS los ${itemsCultivo.length} registros de planificación para el cultivo ${cultivoNombre.toUpperCase()} en esta semana?`)) {
+            return;
+        }
+        
+        const ids = itemsCultivo.map(p => p.id);
+        showNotification(`Eliminando ${ids.length} registros para ${cultivoNombre.toUpperCase()}...`, 'info');
+        
+        try {
+            await Promise.all(ids.map(id => api.deletePlanificacion(id)));
+            showNotification(`✓ Se eliminaron todos los registros de ${cultivoNombre.toUpperCase()}`, 'success');
+            
+            if (mode === 'actual') {
+                App.navigate('planificacion');
+            } else {
+                App.navigate('planificacion-siguiente');
+            }
+        } catch (err) {
+            showNotification('Error al eliminar registros del cultivo', 'error');
+        }
+    };
+    
+    // ========== RENDER PLANIFICACION CON EDICION (AGRUPADA POR CULTIVO) ==========
     const renderPlanificacion = () => {
         const itemsFiltrados = getPlanificacionFiltrada();
         const isCosechaGroup = grupoActivo === 'COSECHA';
         
         if (!grupoActivo) {
-            return `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1.5rem;">
+            return `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">
                 <i class="fa-solid fa-hand-pointer" style="margin-bottom:0.5rem; display:block; font-size:1.2rem; opacity:0.5;"></i>
                 Selecciona una actividad madre arriba
             </td></tr>`;
         }
         
         if (!itemsFiltrados.length) {
-            return `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1.5rem;">
+            return `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">
                 No hay planificación guardada para ${grupoActivo}
             </td></tr>`;
         }
@@ -456,23 +547,37 @@ const initPlanificacionView = (mode) => { return async () => {
             grouped[cultivo].push(p);
         });
 
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
         let html = '';
         Object.keys(grouped).sort().forEach((cultivo, idx) => {
             const items = grouped[cultivo];
             const subtotalHrs = items.reduce((sum, p) => sum + (p.horasAjustadas || p.horasCalculadas || 0), 0);
-            const cultId = `resumen-cult-${idx}`;
-            const isExpanded = resumenExpandido[cultivo] === true; // Cerrado por defecto como se solicitó
+            const isExpanded = resumenExpandido[cultivo] === true;
+
+            const btnAdminDelete = user.rol === 'ADMIN' ? `
+                <button class="btn btn-sm" onclick="event.stopPropagation(); window.eliminarPlanificacionCultivo('${cultivo}')" 
+                        style="background:rgba(239, 68, 68, 0.15); color:#FCA5A5; border:1px solid rgba(239, 68, 68, 0.3); padding: 0.2rem 0.5rem; font-size:0.65rem; border-radius:4px; margin-left:0.8rem; cursor:pointer;"
+                        title="Eliminar toda la planificación de este cultivo">
+                    <i class="fa-solid fa-trash-arrow-up" style="margin-right:0.25rem;"></i> Eliminar Todo
+                </button>
+            ` : '';
 
             // Header del cultivo (Fila Acordeón)
             html += `
                 <tr onclick="toggleResumenCultivo('${cultivo}')" style="background: rgba(59,130,246,0.08); cursor:pointer; user-select:none;">
-                    <td colspan="3" style="padding: 0.6rem; font-weight: 800; color: white; font-size: 0.8rem;">
-                        <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:0.5rem; color:var(--primary); font-size:0.7rem;"></i>
-                        <i class="fa-solid fa-leaf" style="margin-right:0.3rem; opacity:0.5; color:#10B981;"></i> 
-                        ${cultivo.toUpperCase()}
+                    <td colspan="4" style="padding: 0.6rem; font-weight: 800; color: white; font-size: 0.8rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display:flex; align-items:center;">
+                                <i class="fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:0.5rem; color:var(--primary); font-size:0.7rem;"></i>
+                                <i class="fa-solid fa-leaf" style="margin-right:0.3rem; opacity:0.5; color:#10B981;"></i> 
+                                ${cultivo.toUpperCase()}
+                            </div>
+                            ${btnAdminDelete}
+                        </div>
                     </td>
                     <td style="padding: 0.6rem; text-align: center; font-weight: 800; color: #10B981; font-size: 0.8rem;">
-                        ${subtotalHrs.toFixed(1)}h
+                         ${subtotalHrs.toFixed(1)}h
                     </td>
                     <td style="text-align:right; padding-right:0.5rem;">
                         <span style="font-size:0.6rem; color:var(--text-muted);">${items.length} acts</span>
@@ -511,6 +616,9 @@ const initPlanificacionView = (mode) => { return async () => {
                     if (isEditing) {
                         html += `
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.03); background:rgba(59,130,246,0.05);">
+                                <td style="text-align:center; padding:0.5rem;">
+                                    <input type="checkbox" disabled style="opacity:0.3;">
+                                </td>
                                 <td style="padding:0.5rem; font-size:0.75rem; padding-left: 2rem;">
                                     <strong>${dsc}</strong>
                                     ${subInfoStr}
@@ -535,11 +643,14 @@ const initPlanificacionView = (mode) => { return async () => {
                                         </button>
                                     </div>
                                 </td>
-                                    </tr>
+                            </tr>
                         `;
                     } else {
                         html += `
                             <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+                                <td style="text-align:center; padding:0.5rem;">
+                                    <input type="checkbox" class="plan-row-chk" data-id="${p.id}" onchange="window.actualizarBotonEliminarLote()" style="cursor:pointer;">
+                                </td>
                                 <td style="padding:0.5rem; font-size:0.75rem; padding-left: 2rem;">
                                     <strong>${dsc}</strong>
                                     ${subInfoStr}
@@ -573,6 +684,9 @@ const initPlanificacionView = (mode) => { return async () => {
         const isCosechaGroup = grupoActivo === 'COSECHA';
         return `
             <tr style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase;">
+                <th style="width: 30px; text-align: center; padding: 0.3rem;">
+                    <input type="checkbox" id="check-all-plan" onchange="window.toggleSelectAllPlan(this)" style="cursor: pointer;">
+                </th>
                 <th style="text-align:left; padding:0.3rem;">${isCosechaGroup ? 'Cultivo' : 'Actividad'}</th>
                 <th style="text-align:center; padding:0.3rem;">Blq</th>
                 <th style="text-align:center; padding:0.3rem;">${isCosechaGroup ? 'Tallos' : 'Cant'}</th>
@@ -798,6 +912,11 @@ const initPlanificacionView = (mode) => { return async () => {
         if (cultCont) cultCont.innerHTML = renderCultivoCards();
         if (labCont) labCont.innerHTML = renderLaborCards();
         if (labInp) labInp.innerHTML = renderLaborInput();
+
+        // Re-render table and update counters
+        const tablaPlan = document.getElementById('tabla-plan');
+        if (tablaPlan) tablaPlan.innerHTML = renderPlanificacion();
+        actualizarContadores();
     };
     
     window.seleccionarLabor = (labor) => {
@@ -1302,6 +1421,10 @@ const initPlanificacionView = (mode) => { return async () => {
                         Planificación <span style="color:#F59E0B;" id="plan-grupo-label">${grupoActivo || ''}</span>
                     </span>
                     <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <button id="btn-eliminar-lote" onclick="window.eliminarPlanificacionLote()" 
+                                style="display:none; background:rgba(239, 68, 68, 0.15); color:#FCA5A5; border:1px solid rgba(239, 68, 68, 0.3); padding:0.2rem 0.6rem; font-size:0.75rem; border-radius:6px; font-weight:bold; cursor:pointer; align-items:center; gap:0.25rem;">
+                            <i class="fa-solid fa-trash-can"></i> Eliminar (<span id="count-eliminar-lote">0</span>)
+                        </button>
                         <span id="total-hrs-ingresando" style="display:none; font-size:0.72rem; color:#F59E0B; font-weight:600; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3); border-radius:6px; padding:0.15rem 0.4rem;"></span>
                         <span style="font-size:0.8rem; color:#93C5FD; font-weight:700;">
                             <i class="fa-solid fa-clock" style="margin-right:0.2rem; opacity:0.7;"></i>

@@ -280,7 +280,6 @@ App.registerView('rendimientos', async () => {
             document.getElementById('modal-rendimiento').style.display = 'none';
             App.navigate('rendimientos');
         } catch (err) {
-            showNotification('Error al guardar rendimiento', 'error');
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-save"></i> Guardar';
         }

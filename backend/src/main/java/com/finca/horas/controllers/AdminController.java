@@ -367,6 +367,17 @@ public class AdminController {
             }
         }
         
+        // Chequear si ya existe un rendimiento activo para este producto y actividad
+        if (rendimiento.getProducto() != null && rendimiento.getActividad() != null) {
+            java.util.Optional<Rendimiento> existente = rendimientoRepository.findByProductoAndActividad(
+                rendimiento.getProducto(), rendimiento.getActividad()
+            );
+            if (existente.isPresent() && (existente.get().getActivo() == null || existente.get().getActivo())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Rendimiento duplicado: Ya existe un rendimiento activo configurado para este cultivo y actividad."));
+            }
+        }
+        
         Rendimiento saved = rendimientoRepository.save(rendimiento);
         planificacionService.propagarRendimiento(saved);
         return ResponseEntity.ok(saved);
