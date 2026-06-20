@@ -71,11 +71,14 @@ App.registerView('ejecucion', async () => {
 
     try {
         let grps = [];
-        [semanaActual, areas, actividades, ejecuciones, rendimientos, productos, grps] = await Promise.all([
-            api.getSemanaActual().catch(() => null),
+        semanaActual = await api.getSemanaActual().catch(() => null);
+
+        [areas, actividades, ejecuciones, rendimientos, productos, grps] = await Promise.all([
             api.getAreas().catch(() => []),
             api.getActividades().catch(() => []),
-            api.getEjecuciones().catch(() => []),
+            semanaActual 
+                ? api.getEjecucionesSemana(semanaActual.codigoAass).catch(() => [])
+                : api.getEjecuciones().catch(() => []),
             api.getRendimientos().catch(() => []),
             api.getProductos().catch(() => []),
             api.getGrupos().catch(() => [])
@@ -89,6 +92,16 @@ App.registerView('ejecucion', async () => {
         }
         
         if (semanaActual) {
+            const inicioFechaSemana = semanaActual.fechaInicio ? semanaActual.fechaInicio.split('T')[0] : '';
+            const finFechaSemana = semanaActual.fechaFin ? semanaActual.fechaFin.split('T')[0] : '';
+            ejecuciones = ejecuciones.filter(e => {
+                if (!e.fecha) return false;
+                const f = e.fecha.split('T')[0];
+                if (inicioFechaSemana && f < inicioFechaSemana) return false;
+                if (finFechaSemana && f > finFechaSemana) return false;
+                return true;
+            });
+
             planificacionItems = await api.getPlanificacionSemana(semanaActual.codigoAass).catch(() => []);
             
             // Filtrar por permisos de usuario
@@ -1356,8 +1369,18 @@ App.registerView('ejecucion', async () => {
             }
         });
 
+        if (window.historialCultivosExpandidos === undefined) {
+            window.historialCultivosExpandidos = {};
+        }
+
         window.toggleDiaHistorial = (fecha) => {
             window.historialExpandido[fecha] = !window.historialExpandido[fecha];
+            const hDiv = document.getElementById('historial-ejecuciones-dinamico');
+            if (hDiv) hDiv.innerHTML = renderHistorialEjecuciones(ejecsFiltradas);
+        };
+
+        window.toggleCultivoHistorial = (key) => {
+            window.historialCultivosExpandidos[key] = !window.historialCultivosExpandidos[key];
             const hDiv = document.getElementById('historial-ejecuciones-dinamico');
             if (hDiv) hDiv.innerHTML = renderHistorialEjecuciones(ejecsFiltradas);
         };
@@ -1375,7 +1398,7 @@ App.registerView('ejecucion', async () => {
                 <div class="dia-historial-container" style="margin-bottom:1rem; border:1px solid rgba(255,255,255,0.08); border-radius:12px; overflow:hidden; background:rgba(255,255,255,0.01);">
                     <!-- CABECERA DIA -->
                     <div onclick="toggleDiaHistorial('${fecha}')" 
-                         style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 1rem; background:rgba(255,255,255,0.04); cursor:pointer; user-select:none;">
+                          style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 1rem; background:rgba(255,255,255,0.04); cursor:pointer; user-select:none;">
                         <div style="display:flex; align-items:center; gap:0.5rem;">
                             <i class="fa-solid ${abierto ? 'fa-chevron-down' : 'fa-chevron-right'}" style="color:var(--primary); font-size: 0.8rem;"></i>
                             <span style="font-size:0.85rem; font-weight:600; color:white;">
@@ -1412,67 +1435,99 @@ App.registerView('ejecucion', async () => {
                         const nameB = (b.planificacion?.actividad?.nombre || b.actividad?.nombre || '').toUpperCase();
                         return nameA.localeCompare(nameB);
                     });
+
+                    const key = `${fecha}_${grupo}_${cultivo}`.replace(/\s+/g, '_');
+                    if (window.historialCultivosExpandidos[key] === undefined) {
+                        window.historialCultivosExpandidos[key] = false; // Collapsed by default
+                    }
+                    const cultivoAbierto = !!window.historialCultivosExpandidos[key];
+                    const totalHorasCultivo = ejecs.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+                    const totalUnidadesCultivo = ejecs.reduce((sum, e) => sum + (e.unidadesReales || 0), 0);
+
                     htmlDia += `
-                        <div style="margin-bottom:0.5rem; margin-left:0.5rem;">
-                            <h5 style="color:#F59E0B; font-size:0.8rem; font-weight:700; margin-bottom:0.3rem;">
-                                <i class="fa-solid fa-leaf" style="font-size:0.75rem; margin-right:0.25rem;"></i> CULTIVO: ${cultivo}
-                            </h5>
+                        <div class="historial-cultivo-block" style="margin-bottom:0.75rem; border:1px solid rgba(255,255,255,0.05); border-radius:8px; overflow:hidden; background:rgba(255,255,255,0.01);">
+                            <!-- CABECERA CULTIVO (EXPANDIBLE) -->
+                            <div onclick="window.toggleCultivoHistorial('${key}')" 
+                                 style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0.75rem; background:rgba(245, 158, 11, 0.05); cursor:pointer; user-select:none; transition:background 0.2s;"
+                                 onmouseover="this.style.background='rgba(245, 158, 11, 0.1)'"
+                                 onmouseout="this.style.background='rgba(245, 158, 11, 0.05)'">
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <i class="fa-solid ${cultivoAbierto ? 'fa-chevron-down' : 'fa-chevron-right'}" style="color:#F59E0B; font-size:0.75rem;"></i>
+                                    <span style="color:#F59E0B; font-size:0.8rem; font-weight:700; text-transform:uppercase;">
+                                        <i class="fa-solid fa-leaf" style="font-size:0.75rem; margin-right:0.25rem;"></i> CULTIVO: ${cultivo}
+                                    </span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:0.4rem;">
+                                    <span class="badge" style="background:rgba(16, 185, 129, 0.15); color:#A7F3D0; font-weight:700; font-size:0.7rem; padding:0.15rem 0.4rem; border-radius:4px; border:1px solid rgba(16, 185, 129, 0.2);">
+                                        ${totalHorasCultivo.toFixed(1)}h
+                                    </span>
+                                    <span class="badge" style="background:rgba(59, 130, 246, 0.15); color:#93C5FD; font-weight:700; font-size:0.7rem; padding:0.15rem 0.4rem; border-radius:4px; border:1px solid rgba(59, 130, 246, 0.2);">
+                                        ${totalUnidadesCultivo.toLocaleString()} und
+                                    </span>
+                                    <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:0.7rem; padding:0.15rem 0.3rem; border-radius:4px;">
+                                        ${ejecs.length} reg
+                                    </span>
+                                </div>
+                            </div>
                             
-                            <table style="width:100%; font-size:0.8rem; border-collapse:collapse; margin-bottom:0.5rem; background:rgba(255,255,255,0.02); border-radius:6px; overflow:hidden;">
-                                <thead>
-                                    <tr style="background:rgba(0,0,0,0.3); color:var(--text-muted); text-transform:uppercase; font-size:0.65rem;">
-                                        <th style="padding:0.4rem 0.6rem;">Actividad</th>
-                                        <th style="padding:0.4rem 0.6rem; text-align:center;">Bloque</th>
-                                        <th style="padding:0.4rem 0.6rem; text-align:center;">Tipo</th>
-                                        <th style="padding:0.4rem 0.6rem; text-align:right;">Horas</th>
-                                        <th style="padding:0.4rem 0.6rem; text-align:right;">Unidades</th>
-                                        <th style="padding:0.4rem 0.6rem; text-align:center;">Rendimiento</th>
-                                        <th style="padding:0.4rem 0.6rem; text-align:center; width:100px;">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${ejecsOrdenadas.map(e => {
-                                        const esImprevisto = !e.planificacion && e.observacion?.includes('[IMPREVISTO]');
-                                        const actNombre = e.planificacion?.actividad?.nombre || e.actividad?.nombre || '-';
-                                        const bloqueStr = e.planificacion?.bloque || e.planificacion?.valvulas || '-';
-                                        const obsEscapada = (e.observacion || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
-                                        
-                                        return `
-                                            <tr style="border-top:1px solid rgba(255,255,255,0.03);">
-                                                <td style="padding:0.5rem 0.6rem;">
-                                                    <strong>${actNombre}</strong>
-                                                    ${e.observacion ? `<br><small style="color:var(--text-muted); font-style:italic;">"${e.observacion}"</small>` : ''}
-                                                </td>
-                                                <td style="padding:0.5rem 0.6rem; text-align:center; color:white;">${bloqueStr}</td>
-                                                <td style="padding:0.5rem 0.6rem; text-align:center;">
-                                                    ${esImprevisto 
-                                                        ? '<span class="badge" style="background:rgba(245, 158, 11, 0.2); color:#FCD34D; font-size:0.65rem; padding:0.1rem 0.3rem;">IMPREV.</span>' 
-                                                        : '<span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; font-size:0.65rem; padding:0.1rem 0.3rem;">PLAN.</span>'}
-                                                </td>
-                                                <td style="padding:0.5rem 0.6rem; text-align:right; font-weight:600; color:white;">${(e.horasReales || 0).toFixed(1)}h</td>
-                                                <td style="padding:0.5rem 0.6rem; text-align:right; font-weight:600; color:white;">${(e.unidadesReales || 0).toLocaleString()}</td>
-                                                <td style="padding:0.5rem 0.6rem; text-align:center;">
-                                                    <span class="badge" style="background:rgba(16, 185, 129, 0.15); color:#A7F3D0; font-size:0.7rem;">
-                                                        ${(e.rendimientoReal || 0).toFixed(1)} u/h
-                                                    </span>
-                                                </td>
-                                                <td style="padding:0.5rem 0.6rem; text-align:center;">
-                                                    <div style="display:flex; gap:0.3rem; justify-content:center;">
-                                                        <button class="btn btn-sm" onclick="abrirModalEditarEjecucion(${e.id}, '${e.fecha}', ${e.horasReales}, ${e.unidadesReales}, '${obsEscapada}')"
-                                                                style="padding:3px 6px; font-size:0.75rem; border:1px solid rgba(59, 130, 246, 0.3); color:#93C5FD; background:rgba(59, 130, 246, 0.1); cursor:pointer; border-radius:4px;">
-                                                            <i class="fa-solid fa-pencil"></i>
-                                                        </button>
-                                                        <button class="btn btn-sm" onclick="eliminarEjecucionRegistro(${e.id})"
-                                                                style="padding:3px 6px; font-size:0.75rem; border:1px solid rgba(239, 68, 68, 0.3); color:#FCA5A5; background:rgba(239, 68, 68, 0.1); cursor:pointer; border-radius:4px;">
-                                                            <i class="fa-solid fa-trash-can"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
+                            <!-- DETALLE DE LA TABLA (EXPANDIBLE) -->
+                            <div style="display:${cultivoAbierto ? 'block' : 'none'}; padding:0.5rem; background:rgba(0,0,0,0.1); border-top:1px solid rgba(255,255,255,0.03);">
+                                <table style="width:100%; font-size:0.8rem; border-collapse:collapse; background:rgba(255,255,255,0.01); border-radius:6px; overflow:hidden;">
+                                    <thead>
+                                        <tr style="background:rgba(0,0,0,0.3); color:var(--text-muted); text-transform:uppercase; font-size:0.65rem;">
+                                            <th style="padding:0.4rem 0.6rem; text-align:left;">Actividad</th>
+                                            <th style="padding:0.4rem 0.6rem; text-align:center;">Bloque</th>
+                                            <th style="padding:0.4rem 0.6rem; text-align:center;">Tipo</th>
+                                            <th style="padding:0.4rem 0.6rem; text-align:right;">Horas</th>
+                                            <th style="padding:0.4rem 0.6rem; text-align:right;">Unidades</th>
+                                            <th style="padding:0.4rem 0.6rem; text-align:center;">Rendimiento</th>
+                                            <th style="padding:0.4rem 0.6rem; text-align:center; width:100px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${ejecsOrdenadas.map(e => {
+                                            const esImprevisto = !e.planificacion && e.observacion?.includes('[IMPREVISTO]');
+                                            const actNombre = e.planificacion?.actividad?.nombre || e.actividad?.nombre || '-';
+                                            const bloqueStr = e.planificacion?.bloque || e.planificacion?.valvulas || '-';
+                                            const obsEscapada = (e.observacion || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                                            
+                                            return `
+                                                <tr style="border-top:1px solid rgba(255,255,255,0.03);">
+                                                    <td style="padding:0.5rem 0.6rem; text-align:left;">
+                                                        <strong>${actNombre}</strong>
+                                                        ${e.observacion ? `<br><small style="color:var(--text-muted); font-style:italic;">"${e.observacion}"</small>` : ''}
+                                                    </td>
+                                                    <td style="padding:0.5rem 0.6rem; text-align:center; color:white;">${bloqueStr}</td>
+                                                    <td style="padding:0.5rem 0.6rem; text-align:center;">
+                                                        ${esImprevisto 
+                                                            ? '<span class="badge" style="background:rgba(245, 158, 11, 0.2); color:#FCD34D; font-size:0.65rem; padding:0.1rem 0.3rem;">IMPREV.</span>' 
+                                                            : '<span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#93C5FD; font-size:0.65rem; padding:0.1rem 0.3rem;">PLAN.</span>'}
+                                                    </td>
+                                                    <td style="padding:0.5rem 0.6rem; text-align:right; font-weight:600; color:white;">${(e.horasReales || 0).toFixed(1)}h</td>
+                                                    <td style="padding:0.5rem 0.6rem; text-align:right; font-weight:600; color:white;">${(e.unidadesReales || 0).toLocaleString()}</td>
+                                                    <td style="padding:0.5rem 0.6rem; text-align:center;">
+                                                        <span class="badge" style="background:rgba(16, 185, 129, 0.15); color:#A7F3D0; font-size:0.7rem;">
+                                                            ${(e.rendimientoReal || 0).toFixed(1)} u/h
+                                                        </span>
+                                                    </td>
+                                                    <td style="padding:0.5rem 0.6rem; text-align:center;">
+                                                        <div style="display:flex; gap:0.3rem; justify-content:center;">
+                                                            <button class="btn btn-sm" onclick="abrirModalEditarEjecucion(${e.id}, '${e.fecha}', ${e.horasReales}, ${e.unidadesReales}, '${obsEscapada}')"
+                                                                    style="padding:3px 6px; font-size:0.75rem; border:1px solid rgba(59, 130, 246, 0.3); color:#93C5FD; background:rgba(59, 130, 246, 0.1); cursor:pointer; border-radius:4px;">
+                                                                <i class="fa-solid fa-pencil"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm" onclick="eliminarEjecucionRegistro(${e.id})"
+                                                                    style="padding:3px 6px; font-size:0.75rem; border:1px solid rgba(239, 68, 68, 0.3); color:#FCA5A5; background:rgba(239, 68, 68, 0.1); cursor:pointer; border-radius:4px;">
+                                                                <i class="fa-solid fa-trash-can"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     `;
                 });
@@ -1485,7 +1540,6 @@ App.registerView('ejecucion', async () => {
                 </div>
             `;
             return htmlDia;
-        }).join('');
     };
 
     // ========== NAVEGACION CON TECLADO EJECUCION ==========
@@ -1531,7 +1585,7 @@ App.registerView('ejecucion', async () => {
     };
 
     if (window.historialGlobalExpandido === undefined) {
-        window.historialGlobalExpandido = false;
+        window.historialGlobalExpandido = true;
     }
     
     window.toggleHistorialGlobal = () => {
@@ -1555,10 +1609,21 @@ App.registerView('ejecucion', async () => {
         const ejecsFiltradasGrupo = getEjecucionesFiltradasGrupo();
         if (ejecsFiltradasGrupo.length === 0) return '';
 
+        const totalHorasGrupoHoy = ejecsFiltradasGrupo.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+
         return `
             <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
                 <div onclick="window.toggleHistorialGlobal()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
-                    <h3 style="margin:0;"><i class="fa-solid fa-history" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial de Ejecuciones del Día <span class="badge" style="margin-left:0.5rem; background:var(--secondary); color:white;">${ejecsFiltradasGrupo.length}</span></h3>
+                    <h3 style="margin:0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                        <i class="fa-solid fa-history" style="color:var(--secondary);"></i> 
+                        Historial de Ejecuciones del Día 
+                        <span class="badge" style="background:var(--secondary); color:white; font-weight:700;">
+                            ${totalHorasGrupoHoy.toFixed(1)}h ejecutadas
+                        </span>
+                        <span class="badge" style="background:rgba(255,255,255,0.08); color:var(--text-muted); font-size:0.75rem;">
+                            ${ejecsFiltradasGrupo.length} registros
+                        </span>
+                    </h3>
                     <i class="fa-solid ${window.historialGlobalExpandido ? 'fa-chevron-up' : 'fa-chevron-down'}" style="color:var(--text-muted);"></i>
                 </div>
                 <div id="historial-ejecuciones-dinamico" style="margin-top:1.5rem; display:${window.historialGlobalExpandido ? 'block' : 'none'};">
