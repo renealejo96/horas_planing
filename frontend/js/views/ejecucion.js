@@ -1287,7 +1287,7 @@ App.registerView('ejecucion', async () => {
         if (ejecsFiltradasGrupo.length === 0) {
             return `
                 <div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.9rem;">
-                    No hay registros de ejecución para la categoría <strong>${grupoActivo}</strong> en esta semana.
+                    No hay registros de ejecución para la categoría <strong>${grupoActivo}</strong> en este día.
                 </div>
             `;
         }
@@ -1319,13 +1319,15 @@ App.registerView('ejecucion', async () => {
         // Ordenar fechas descendente
         const fechasOrdenadas = Object.keys(agrupados).sort((a, b) => b.localeCompare(a));
         
-        // Mantener registro de qué días están expandidos (por defecto, el primero)
+        // Mantener registro de qué días están expandidos (por defecto, todos los que se muestran)
         if (window.historialExpandido === undefined) {
             window.historialExpandido = {};
-            if (fechasOrdenadas.length > 0) {
-                window.historialExpandido[fechasOrdenadas[0]] = true; // El más reciente abierto por defecto
-            }
         }
+        fechasOrdenadas.forEach(fecha => {
+            if (window.historialExpandido[fecha] === undefined) {
+                window.historialExpandido[fecha] = true; // Abierto por defecto
+            }
+        });
 
         window.toggleDiaHistorial = (fecha) => {
             window.historialExpandido[fecha] = !window.historialExpandido[fecha];
@@ -1507,9 +1509,7 @@ App.registerView('ejecucion', async () => {
 
     const inicioFechaSemana = semanaActual?.fechaInicio ? semanaActual.fechaInicio.split('T')[0] : '';
     const finFechaSemana = semanaActual?.fechaFin ? semanaActual.fechaFin.split('T')[0] : '';
-    const ejecucionesFiltradas = (semanaActual && inicioFechaSemana && finFechaSemana)
-        ? ejecuciones.filter(e => e.fecha >= inicioFechaSemana && e.fecha <= finFechaSemana)
-        : [];
+    const ejecucionesFiltradas = ejecuciones.filter(e => e.fecha === fechaSeleccionada);
 
     setTimeout(() => {
         configurarNavegacionTecladoEjecucion();
@@ -1644,7 +1644,7 @@ App.registerView('ejecucion', async () => {
             ${ejecucionesFiltradas.length > 0 ? `
             <div class="card" style="margin-top:1.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
                 <div onclick="window.toggleHistorialGlobal()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none;">
-                    <h3 style="margin:0;"><i class="fa-solid fa-history" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial de Ejecuciones de la Semana <span class="badge" style="margin-left:0.5rem; background:var(--secondary); color:white;">${ejecucionesFiltradas.length}</span></h3>
+                    <h3 style="margin:0;"><i class="fa-solid fa-history" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial de Ejecuciones del Día <span class="badge" style="margin-left:0.5rem; background:var(--secondary); color:white;">${ejecucionesFiltradas.length}</span></h3>
                     <i class="fa-solid ${window.historialGlobalExpandido ? 'fa-chevron-up' : 'fa-chevron-down'}" style="color:var(--text-muted);"></i>
                 </div>
                 <div id="historial-ejecuciones-dinamico" style="margin-top:1.5rem; display:${window.historialGlobalExpandido ? 'block' : 'none'};">

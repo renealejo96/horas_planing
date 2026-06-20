@@ -4,13 +4,20 @@ App.registerView('dashboard', async () => {
     let todasLasSemanas = [];
     let semanaActual = null, semanaSiguiente = null, planificacion = [], ejecuciones = [];
     let planificacionProxima = [];
+    let grupos = [];
     
     let semanaSeleccionada = window.dashboardSemanaSeleccionada || null;
+    let filtroGraficaLabor = window.dashboardFiltroGraficaLabor || 'TODAS';
     
     window.cambiarSemanaDashboard = (codigoAass) => {
         const encontrada = todasLasSemanas.find(s => s.codigoAass === codigoAass);
         if (!encontrada) return;
         window.dashboardSemanaSeleccionada = encontrada;
+        App.navigate('dashboard');
+    };
+
+    window.cambiarFiltroGrafica = (labor) => {
+        window.dashboardFiltroGraficaLabor = labor;
         App.navigate('dashboard');
     };
     
@@ -132,11 +139,12 @@ App.registerView('dashboard', async () => {
     let datosGrafica = [];
     
     try {
-        [dashboard, todasLasSemanas, semanaActual, semanaSiguiente] = await Promise.all([
+        [dashboard, todasLasSemanas, semanaActual, semanaSiguiente, grupos] = await Promise.all([
             api.getDashboard(),
             api.getSemanasDisponibles().catch(() => []),
             api.getSemanaActual().catch(() => null),
-            api.getSemanaSiguiente().catch(() => null)
+            api.getSemanaSiguiente().catch(() => null),
+            api.getGrupos().catch(() => [])
         ]);
         
         if (!semanaSeleccionada) {
@@ -162,17 +170,40 @@ App.registerView('dashboard', async () => {
             .sort((a, b) => a.codigoAass.localeCompare(b.codigoAass))
             .slice(-6); // Las últimas 6 semanas
             
-        const comparativas = await Promise.all(
-            semanasParaGrafica.map(s => api.getComparativaSemana(s.codigoAass).catch(() => null))
-        );
+        const [planificacionesParaGrafica, ejecucionesParaGrafica] = await Promise.all([
+            Promise.all(semanasParaGrafica.map(s => api.getPlanificacionSemana(s.codigoAass).catch(() => []))),
+            Promise.all(semanasParaGrafica.map(s => api.getEjecucionesSemana(s.codigoAass).catch(() => [])))
+        ]);
         
         datosGrafica = semanasParaGrafica.map((s, idx) => {
-            const comp = comparativas[idx];
+            const planSem = planificacionesParaGrafica[idx];
+            const ejecSem = ejecucionesParaGrafica[idx];
+            
+            let planificadas = 0;
+            let ejecutadas = 0;
+            
+            if (filtroGraficaLabor === 'TODAS') {
+                planificadas = planSem.reduce((sum, p) => sum + (p.horasAjustadas || p.horasCalculadas || 0), 0);
+                ejecutadas = ejecSem.reduce((sum, e) => sum + (e.horasReales || 0), 0);
+            } else {
+                planificadas = planSem.filter(p => {
+                    const rawName = (p.actividad?.laborMadre || p.actividad?.grupo || p.actividad?.nombre || 'GENERAL').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return grupo === filtroGraficaLabor.toUpperCase();
+                }).reduce((sum, p) => sum + (p.horasAjustadas || p.horasCalculadas || 0), 0);
+                
+                ejecutadas = ejecSem.filter(e => {
+                    const rawName = (e.planificacion?.actividad?.laborMadre || e.actividad?.laborMadre || 'GENERAL').toUpperCase();
+                    const grupo = rawName.includes('COSECHA') ? 'COSECHA' : rawName;
+                    return grupo === filtroGraficaLabor.toUpperCase();
+                }).reduce((sum, e) => sum + (e.horasReales || 0), 0);
+            }
+            
             return {
                 semana: s.codigoAass,
-                planificadas: comp ? (comp.totalHorasPlanificadasSemana || 0) : 0,
-                ejecutadas: comp ? (comp.totalHorasEjecutadasSemana || 0) : 0,
-                margen: comp ? ((comp.totalHorasEjecutadasSemana || 0) - (comp.totalHorasPlanificadasSemana || 0)) : 0
+                planificadas: planificadas,
+                ejecutadas: ejecutadas,
+                margen: ejecutadas - planificadas
             };
         });
     } catch (e) {
@@ -382,49 +413,7 @@ App.registerView('dashboard', async () => {
                 </div>
             </div>
 
-            <div class="grid-cards">
-                <div class="card stat-card">
-                    <i class="fa-solid fa-users stat-icon"></i>
-                    <div class="stat-title">Personal Total</div>
-                    <div class="stat-value">${dashboard.totalTrabajadores}</div>
-                </div>
-                
-                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(109, 40, 217, 0.25)); display: flex; flex-direction: column; justify-content: flex-start; min-height: 220px;">
-                    <i class="fa-solid fa-business-time stat-icon" style="top: 1rem; right: 1rem;"></i>
-                    <div class="stat-title">Horas Nómina (Ideales)</div>
-                    <div class="stat-value" style="font-size: 2.2rem; font-weight: 700; margin-bottom: 0.75rem;">
-                        ${dashboard.personalPorArea.reduce((sum, a) => sum + (a.cantidad * 40), 0).toLocaleString()}h
-                    </div>
-                    <!-- Lista de áreas con horas correspondientes -->
-                    <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; width: 100%; margin-top: auto;">
-                        ${dashboard.personalPorArea.map(a => `
-                            <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-muted);">
-                                <span><i class="fa-solid fa-users" style="color:var(--primary); font-size:0.7rem; margin-right:0.3rem;"></i>${a.area}</span>
-                                <span style="font-weight:600; color:white;">${(a.cantidad * 40).toLocaleString()}h</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-                
-                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(30, 64, 175, 0.2))">
-                    <i class="fa-solid fa-layer-group stat-icon"></i>
-                    <div class="stat-title">Áreas</div>
-                    <div class="stat-value">${dashboard.totalAreas}</div>
-                </div>
-
-                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(180, 83, 9, 0.2))">
-                    <i class="fa-solid fa-tasks stat-icon"></i>
-                    <div class="stat-title">Actividades</div>
-                    <div class="stat-value">${dashboard.totalActividades}</div>
-                </div>
-                
-                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.2))">
-                    <i class="fa-solid fa-seedling stat-icon"></i>
-                    <div class="stat-title">Productos</div>
-                    <div class="stat-value">${dashboard.totalProductos}</div>
-                </div>
-            </div>
-
+            <!-- SEMANAS DE TRABAJO -->
             <div class="card" style="margin-top:1.5rem; margin-bottom:1.5rem;">
                 <h3><i class="fa-solid fa-calendar-week" style="color:var(--primary); margin-right:0.5rem;"></i> Semanas de Trabajo</h3>
                 <div class="dashboard-weeks-grid">
@@ -480,13 +469,73 @@ App.registerView('dashboard', async () => {
                 </div>
             </div>
 
-            <!-- GRÁFICA DE MARGEN DE HORAS SEMANAL -->
+            <!-- GRÁFICA DE MARGEN DE HORAS SEMANAL CON FILTRO POR ACTIVIDAD MADRE -->
             <div class="card" style="margin-bottom:1.5rem;">
-                <h3 style="margin-bottom:0.5rem;"><i class="fa-solid fa-chart-column" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial y Margen de Horas Semanal</h3>
-                <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1.5rem;">Comparativa histórica de las últimas semanas planificadas vs. ejecutadas (ejecutado - planificado)</p>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <h3 style="margin:0;"><i class="fa-solid fa-chart-column" style="color:var(--secondary); margin-right:0.5rem;"></i> Historial y Margen de Horas Semanal</h3>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin:0.25rem 0 0 0;">Comparativa histórica de las últimas semanas planificadas vs. ejecutadas (ejecutado - planificado)</p>
+                    </div>
+                    
+                    <div style="display:flex; align-items:center; gap:0.5rem; background:rgba(255,255,255,0.05); padding:0.5rem 1rem; border-radius:10px; border:1px solid var(--surface-glass-border);">
+                        <label for="dash-grafica-filtro-select" style="font-size:0.85rem; color:var(--text-muted); font-weight:600; white-space:nowrap;"><i class="fa-solid fa-filter"></i> Filtrar por:</label>
+                        <select id="dash-grafica-filtro-select" onchange="cambiarFiltroGrafica(this.value)" style="padding:0.4rem; border-radius:6px; background:#1E293B; border:1px solid rgba(255,255,255,0.15); color:white; font-weight:700; width:150px;">
+                            <option value="TODAS" ${filtroGraficaLabor === 'TODAS' ? 'selected' : ''}>TODAS LAS LABORES</option>
+                            ${grupos.map(g => {
+                                const isSel = filtroGraficaLabor === g ? 'selected' : '';
+                                return `<option value="${g}" ${isSel}>${g}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                </div>
                 ${renderGraficaSemanas(datosGrafica)}
             </div>
 
+            <!-- TARJETAS DE ESTADO GLOBAL (STAT CARDS) -->
+            <div class="grid-cards" style="margin-bottom:1.5rem;">
+                <div class="card stat-card">
+                    <i class="fa-solid fa-users stat-icon"></i>
+                    <div class="stat-title">Personal Total</div>
+                    <div class="stat-value">${dashboard.totalTrabajadores}</div>
+                </div>
+                
+                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(109, 40, 217, 0.25)); display: flex; flex-direction: column; justify-content: flex-start; min-height: 220px;">
+                    <i class="fa-solid fa-business-time stat-icon" style="top: 1rem; right: 1rem;"></i>
+                    <div class="stat-title">Horas Nómina (Ideales)</div>
+                    <div class="stat-value" style="font-size: 2.2rem; font-weight: 700; margin-bottom: 0.75rem;">
+                        ${dashboard.personalPorArea.reduce((sum, a) => sum + (a.cantidad * 40), 0).toLocaleString()}h
+                    </div>
+                    <!-- Lista de áreas con horas correspondientes -->
+                    <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; width: 100%; margin-top: auto;">
+                        ${dashboard.personalPorArea.map(a => `
+                            <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-muted);">
+                                <span><i class="fa-solid fa-users" style="color:var(--primary); font-size:0.7rem; margin-right:0.3rem;"></i>${a.area}</span>
+                                <span style="font-weight:600; color:white;">${(a.cantidad * 40).toLocaleString()}h</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(30, 64, 175, 0.2))">
+                    <i class="fa-solid fa-layer-group stat-icon"></i>
+                    <div class="stat-title">Áreas</div>
+                    <div class="stat-value">${dashboard.totalAreas}</div>
+                </div>
+
+                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(180, 83, 9, 0.2))">
+                    <i class="fa-solid fa-tasks stat-icon"></i>
+                    <div class="stat-title">Actividades</div>
+                    <div class="stat-value">${dashboard.totalActividades}</div>
+                </div>
+                
+                <div class="card stat-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.2))">
+                    <i class="fa-solid fa-seedling stat-icon"></i>
+                    <div class="stat-title">Productos</div>
+                    <div class="stat-value">${dashboard.totalProductos}</div>
+                </div>
+            </div>
+
+            <!-- ACCIONES RÁPIDAS -->
             <div class="card" style="margin-bottom:1.5rem;">
                 <h3><i class="fa-solid fa-rocket" style="color:var(--primary); margin-right:0.5rem;"></i> Acciones Rápidas</h3>
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-top:1.5rem;">
@@ -505,6 +554,7 @@ App.registerView('dashboard', async () => {
                 </div>
             </div>
             
+            <!-- PERSONAL POR ÁREA -->
             <div class="card">
                 <h3><i class="fa-solid fa-chart-pie" style="color:var(--secondary); margin-right:0.5rem;"></i> Personal por Área</h3>
                 <div style="margin-top:1rem; display:grid; gap:0.75rem;">
